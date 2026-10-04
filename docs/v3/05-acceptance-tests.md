@@ -480,3 +480,124 @@ HKR-01…HKR-14 all covered by a named executable test; 10/10 runtime mutations
 fail safely; zero non-ACTIVE executions; resolver purity proven; Core `01`–`04`
 byte-unchanged; `12` byte-unchanged; source 18/18; Task 05's 35 tests still
 pass; git state reported, nothing committed.
+
+---
+
+## Group K — Tool Bus Tests (added Task 07; contract: `15-tool-bus.md`)
+
+Executable with `node --test` from the repo root. Files: `test/tb-bus.test.mjs`
+(19 tests, 3 suites — TB-01…TB-14 + TB-20…TB-24) and `test/tb-runtime.test.mjs`
+(6 tests, 1 suite — TB-15…TB-19 + an invalid-capability runtime check); together
+with Groups I+J's 58 the suite is **83 tests, 15 suites**. New module:
+`modules/tool-bus/` (L1 Core Service: `capabilities.json` declarations,
+`manifest.yaml`, `src/bus.mjs`, `src/capabilities.mjs`, `src/errors.mjs`) plus
+`modules/hotkeys/src/dependencies.mjs` (dependency report) and the `toolBus`
+option in `modules/hotkeys/src/runtime.mjs`. Groups I/J are untouched and still
+pass; Core `01`–`04`, `12`, and the 18 source files are unchanged.
+
+**TB-01 Valid capability registers**
+*Scenario:* Build a bus from the pristine declarations; `register` a schema-valid synthetic capability.
+*Pass criteria:* `validation.ok=true`; `TB_OK` with `error:null`; `has` true; `resolve` returns the complete descriptor (nine declared fields + `providerRegistered` + `invoke`); the capability appears in `list`. *Test:* `TB-01` (`test/tb-bus.test.mjs`).
+
+**TB-02 Duplicate capability ids fail closed**
+*Scenario:* `register` a capability whose id already exists (and `registerProvider` a duplicate provider id).
+*Pass criteria:* `CAPABILITY_DUPLICATE` (class `E-CONFLICT`) — no silent overwrite; the original capability/provider is untouched; `validate` reports `CAPABILITY_DUPLICATE` for the duplicate candidate. *Test:* `TB-02` (`test/tb-bus.test.mjs`).
+
+**TB-03 Invalid capability schema is rejected**
+*Scenario:* Submit candidates violating individual fields (bad/missing id, version, purpose, status, input, output, requires, provider, errors) and a non-object.
+*Pass criteria:* every candidate → `CAPABILITY_INVALID` (`E-VALID`) with the exact violation codes; none becomes resolvable. *Test:* `TB-03` (`test/tb-bus.test.mjs`).
+
+**TB-04 Unknown capability cannot resolve**
+*Scenario:* `resolve`/`check`/`invoke`/`describe` unknown ids, wrong-case ids, near-miss strings, and non-strings.
+*Pass criteria:* `has` false; every lookup → `TOOL_NOT_FOUND` (`E-INPUT`); no fuzzy, case-insensitive, alias, or fallback match ever hits a registered capability. *Test:* `TB-04` (`test/tb-bus.test.mjs`).
+
+**TB-05 Unavailable capability cannot invoke**
+*Scenario:* Invoke `search providers` (`UNAVAILABLE`).
+*Pass criteria:* `check`/`invoke` refuse `TOOL_UNAVAILABLE` (class `E-TOOL`), `output:null`, provider never called; `resolve` still shows the true state. *Test:* `TB-05` (`test/tb-bus.test.mjs`).
+
+**TB-06 Blocked capability cannot invoke**
+*Scenario:* Invoke an adapter-backed capability (`BLOCKED`, e.g. `browser tool`).
+*Pass criteria:* refuse `TOOL_BLOCKED` (class `E-CONFLICT`) at the status gate — before any provider lookup; `output:null`. *Test:* `TB-06` (`test/tb-bus.test.mjs`).
+
+**TB-07 Disabled capability cannot invoke**
+*Scenario:* Invoke a synthetic `DISABLED` capability.
+*Pass criteria:* refuse `TOOL_DISABLED` with a code distinct from TB-05 — a missing tool is not a disabled tool, and neither is collapsed into the other. *Test:* `TB-07` (`test/tb-bus.test.mjs`).
+
+**TB-08 Missing dependency prevents invocation**
+*Scenario:* A capability whose `requires` names an unregistered id, and one whose dependency is registered but not `AVAILABLE`.
+*Pass criteria:* `DEPENDENCY_MISSING` (`E-ENV`) and `DEPENDENCY_BLOCKED` (`E-CONFLICT`) respectively; no invocation reaches a provider. *Test:* `TB-08` (`test/tb-bus.test.mjs`).
+
+**TB-09 Missing provider prevents invocation**
+*Scenario:* Invoke a capability that declares a provider id nobody bound.
+*Pass criteria:* `PROVIDER_MISSING` (`E-ENV`, detail = the provider id) before execution; `describe` reports `providerRegistered:false`. *Test:* `TB-09` (`test/tb-bus.test.mjs`).
+
+**TB-10 Valid provider executes successfully**
+*Scenario:* Invoke `files` on a real repository document through the bound `local-files` provider.
+*Pass criteria:* `TB_OK`, `error:null`, structured output (`file`, `bytes`, `lines`, `sha256` of the real file bytes, `content`); provider id echoed. *Test:* `TB-10` (`test/tb-bus.test.mjs`).
+
+**TB-11 Provider failure becomes a deterministic structured failure**
+*Scenario:* Providers that throw `ENOENT`, a permission error, and an unknown error; invoke each twice.
+*Pass criteria:* `PROVIDER_FAILURE` with the classified error (`E_ENV_MISSING_FILE` / `E_TOOL_READ_FAILED` / `E_UNKNOWN_EXCEPTION` — `classifyProviderError`, never a raw stack); `output:null`; byte-identical structured results across reruns. *Test:* `TB-11` (`test/tb-bus.test.mjs`).
+
+**TB-12 Invalid input is rejected before provider execution**
+*Scenario:* Invoke a valid capability with wrong-typed/missing/extra input fields; spy on the provider.
+*Pass criteria:* `INPUT_INVALID` (`E-INPUT`) with the failing field; spy run 0 — the provider never sees malformed input. *Test:* `TB-12` (`test/tb-bus.test.mjs`).
+
+**TB-13 Repeated resolution is deterministic**
+*Scenario:* Repeat `resolve`/`check`/`describe` on the same ids; compare structured results; scan for volatile data.
+*Pass criteria:* equivalent results every time; no timestamps, uuids, pids, or machine paths in any result. *Test:* `TB-13` (`test/tb-bus.test.mjs`).
+
+**TB-14 Repeated reports are byte-identical**
+*Scenario:* Build `buildToolBusReport` twice on one bus and once on a fresh equal bus; with and without hotkey rows.
+*Pass criteria:* identical `text` and `sha256` (hash of its own bytes) every time; states declarations sha256, `Valid=true`, `Capabilities=11`, status counts 1/2/8/0, and all report sections; no volatile data; the declaration file's own sha256 matches. *Test:* `TB-14` (`test/tb-bus.test.mjs`).
+
+**TB-15 Runtime receives `TOOL_REQUIRED`**
+*Scenario:* Wire the bus into `createRuntime` and make a handler's `requiredTools` include an unavailable capability.
+*Pass criteria:* `executeHotkey` → classification `TOOL_REQUIRED`, code `E_TOOL_UNAVAILABLE` (class `E-TOOL`), `status=blocked`, handler never runs. *Test:* `TB-15` (`test/tb-runtime.test.mjs`).
+
+**TB-16 Runtime receives the dependency-blocked result**
+*Scenario:* Required capability is `BLOCKED` on the bus (and a dependency-blocked chain).
+*Pass criteria:* `TOOL_REQUIRED` with the distinct code `E_CONFLICT_DEPENDENCY_BLOCKED` (class `E-CONFLICT`) — blocked state is not collapsed into plain tool-unavailable; no execution. *Test:* `TB-16` (`test/tb-runtime.test.mjs`).
+
+**TB-17 No-tool hotkey remains executable without a Tool Bus dependency**
+*Scenario:* Execute a handler whose `requiredTools` is empty while a valid bus is wired (and with an empty bus capability set).
+*Pass criteria:* `EXECUTABLE`/`OK_EXECUTED` — the bus is never an artificial blocker for tool-free behavior. *Test:* `TB-17` (`test/tb-runtime.test.mjs`).
+
+**TB-18 SoS stays `TOOL_REQUIRED`**
+*Scenario:* Execute `SoS` with the pristine bus wired (search provider absent).
+*Pass criteria:* `TOOL_REQUIRED` / `E_TOOL_UNAVAILABLE`, explanation names `search providers`; zero search behavior executed or faked; registry record untouched. *Test:* `TB-18` (`test/tb-runtime.test.mjs`).
+
+**TB-19 No fake fallback capability is invoked**
+*Scenario:* Spy handlers/providers while triggering refusals; attempt unknown and refused ids.
+*Pass criteria:* total runs = 0; no substitute/alias capability ever dispatched; refusals are structured, not falls-through. *Test:* `TB-19` (`test/tb-runtime.test.mjs`).
+
+**TB-20…TB-24 Mutation suite — all 5 fail closed**
+*Scenario:* Apply each capability mutation from a fixture; each test first asserts the fixture is byte-different from `modules/tool-bus/capabilities.json` (`fixture !== pristine`).
+*Pass criteria (all 5):*
+
+| # | Mutation | Fixture | Required evidence |
+|---|---|---|---|
+| TB-20 | remove capability declaration | `tb_missing_capability.json` | valid document (`ok=true`) yet `has` false; `resolve`/`check`/`invoke` → `TOOL_NOT_FOUND` |
+| TB-21 | alter capability status (`files` → `DISABLED`) | `tb_status_altered.json` | `resolve` shows `DISABLED`; `invoke` → `TOOL_DISABLED` (`E-CONFLICT`), never executes |
+| TB-22 | remove provider declaration | `tb_provider_removed.json` | `providerRegistered:false`; `invoke` → `PROVIDER_MISSING` (detail `local-files`) |
+| TB-23 | alter dependency (`files.requires` → `ghost-dependency`) | `tb_dependency_altered.json` | schema-valid yet `invoke`/`check` → `DEPENDENCY_MISSING` (`E-ENV`, detail `ghost-dependency`) |
+| TB-24 | duplicate capability (`files` ×2) | `tb_duplicate_capability.json` | `ok=false` + `capability_duplicate`; `list()` empty; every lookup → `CAPABILITY_INVALID` (`E-VALID`); report states `Valid \| false` |
+
+*Tests:* `TB-20`…`TB-24` (`test/tb-bus.test.mjs`); fixtures in `test/_fixtures/`.
+
+**TB runtime extra — invalid declarations refuse execution**
+*Scenario:* Build a runtime over a bus whose declarations failed validation.
+*Pass criteria:* every tool-dependent invocation → `REFUSED` / `E_VALID_CAPABILITY_INVALID` (class `E-VALID`) — an invalid bus can never grant access. *Test:* last case of `test/tb-runtime.test.mjs`.
+
+**Task 07 release gate:** `node --test` = 83/83 pass (15 suites, 0 skipped);
+TB-01…TB-24 all covered by a named executable test; 5/5 capability mutations
+fail closed with byte-different fixtures asserted; reports byte-stable;
+four capability statuses never collapsed; runtime integration passes (TB-15…TB-19);
+Core `01`–`04` byte-unchanged; `12` byte-unchanged; source 18/18; Task 05/06's
+58 tests still pass; git state reported with remote SHA verified.
+
+**Known limitations (Group K):** only `files`/`local-files` is executable —
+`search providers` and `Netlify Drop` are honestly `UNAVAILABLE`, the eight
+adapter-backed capabilities are `BLOCKED` (`12` §4 remains `NOT_ACTIVATED`);
+`DISABLED` exists only in mutation TB-21; no invocation log is persisted; the
+bus gates tools only and never invents handler behavior.

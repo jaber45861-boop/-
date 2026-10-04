@@ -22,6 +22,9 @@ Task 01 deliverable: the Core specification for Grimoire v3.
 | 14 | [Hotkeys L2 module](modules/hotkeys/manifest.yaml) | Registry loader (10 duties) + ACTIVE-only activation gate + byte-stable report builder + fail-closed runtime executor (`executeHotkey`) — registration ≠ activation, execution only after the gate |
 | 15 | [Hotkey module tests](test/) | HKC-01…HKC-17 + HKR-01…HKR-14 executable coverage, 10 + 10 fail-closed mutation suites (`node --test`, 58 tests) |
 | 16 | [Hotkey Runtime Contract](docs/v3/14-hotkey-runtime.md) | `executeHotkey` pipeline, execution states + result-code table, handler contract, 14 ACTIVE resolution results, known limitations |
+| 17 | [Tool Bus L1 module](modules/tool-bus/manifest.yaml) | 11 capability declarations (AVAILABLE/UNAVAILABLE/BLOCKED/DISABLED never collapsed) + deterministic fail-closed bus (`register/validate/has/resolve/check/invoke/describe/list`) + `local-files` provider + byte-stable report |
+| 18 | [Tool Bus tests](test/tb-bus.test.mjs) | TB-01…TB-24 executable coverage (`tb-bus` + `tb-runtime`), 5 byte-different fail-closed capability mutations (`node --test`, 83 tests total) |
+| 19 | [Tool Bus Contract](docs/v3/15-tool-bus.md) | Capability model, lifecycle, resolution flow, failure semantics (code → Core class), adapter interaction, runtime integration, determinism, security boundaries, extension rules |
 | — | [Migration extractor](scripts/migration-extract.sh) | Deterministic fact extraction (MIG-01…MIG-10) |
 
 **Read order:** 01 → 02 → 03 → 04 → 05.

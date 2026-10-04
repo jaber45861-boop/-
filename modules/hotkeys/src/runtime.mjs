@@ -85,6 +85,12 @@ export const RESULT_CODES = Object.freeze({
   E_ENV_HANDLER_MISSING: "E-ENV",
   // E-TOOL — a declared tool is unavailable (03 §4 H5: blocked, E-TOOL).
   E_TOOL_UNAVAILABLE: "E-TOOL",
+  // Tool Bus integration (Task 07): capability states translated at the
+  // runtime boundary — documented in docs/v3/15-tool-bus.md §Runtime
+  // integration. The six execution classes are unchanged.
+  E_CONFLICT_DEPENDENCY_BLOCKED: "E-CONFLICT",
+  E_CONFLICT_TOOL_DISABLED: "E-CONFLICT",
+  E_VALID_CAPABILITY_INVALID: "E-VALID",
   // E-UNKNOWN — classifyException's own codes for handler failures
   // (E_UNKNOWN_EXCEPTION, E_ENV_MISSING_FILE, E_TOOL_READ_FAILED, …).
   E_UNKNOWN_EXCEPTION: "E-UNKNOWN",
@@ -199,7 +205,7 @@ function validateInvocation(input) {
 }
 
 /** Registry-declared tools of a record (12 §2 "Tools" column). */
-function recordTools(record) {
+export function recordTools(record) {
   const raw = record && record.tools;
   if (typeof raw !== "string") return [];
   const trimmed = raw.trim();
@@ -210,9 +216,46 @@ function recordTools(record) {
     .filter((tool) => tool !== "");
 }
 
-function firstMissing(declared, available) {
-  for (const tool of declared) {
-    if (!available.includes(tool)) return tool;
+// Tool Bus translation (Task 07): the bus answers "is this capability
+// usable?" before execution. Exact semantics per bus code — no collapsing:
+//   TOOL_NOT_FOUND / TOOL_UNAVAILABLE / DEPENDENCY_MISSING -> TOOL_REQUIRED
+//     with the long-standing E_TOOL_UNAVAILABLE code (03 §4 H5: blocked, E-TOOL)
+//   TOOL_BLOCKED / DEPENDENCY_BLOCKED -> TOOL_REQUIRED + E_CONFLICT_DEPENDENCY_BLOCKED
+//   TOOL_DISABLED -> TOOL_REQUIRED + E_CONFLICT_TOOL_DISABLED
+//   CAPABILITY_INVALID -> REFUSED + E_VALID_CAPABILITY_INVALID (fail closed)
+const BUS_REFUSAL_MAP = Object.freeze({
+  TOOL_NOT_FOUND: { classification: "TOOL_REQUIRED", code: "E_TOOL_UNAVAILABLE", klass: "E-TOOL", message: "required tool is not available to this runtime" },
+  TOOL_UNAVAILABLE: { classification: "TOOL_REQUIRED", code: "E_TOOL_UNAVAILABLE", klass: "E-TOOL", message: "required tool is not available to this runtime" },
+  DEPENDENCY_MISSING: { classification: "TOOL_REQUIRED", code: "E_TOOL_UNAVAILABLE", klass: "E-TOOL", message: "required tool is not available to this runtime" },
+  TOOL_BLOCKED: { classification: "TOOL_REQUIRED", code: "E_CONFLICT_DEPENDENCY_BLOCKED", klass: "E-CONFLICT", message: "required tool capability is blocked" },
+  DEPENDENCY_BLOCKED: { classification: "TOOL_REQUIRED", code: "E_CONFLICT_DEPENDENCY_BLOCKED", klass: "E-CONFLICT", message: "required tool capability is blocked" },
+  TOOL_DISABLED: { classification: "TOOL_REQUIRED", code: "E_CONFLICT_TOOL_DISABLED", klass: "E-CONFLICT", message: "required tool capability is disabled" },
+  CAPABILITY_INVALID: { classification: "REFUSED", code: "E_VALID_CAPABILITY_INVALID", klass: "E-VALID", message: "required tool capability failed validation" },
+});
+
+/**
+ * Gate a list of required tool tokens: Tool Bus first when wired (exact id
+ * lookup, no fuzzy matching, no substitute), else the legacy availableTools
+ * array. Returns null when everything is available, otherwise a structured
+ * refusal — never executes anything.
+ */
+function gateTools(runtime, tokens) {
+  for (const tool of tokens) {
+    if (runtime.toolBus) {
+      const check = runtime.toolBus.check(tool);
+      if (!check.ok) {
+        const mapped = BUS_REFUSAL_MAP[check.code] ?? BUS_REFUSAL_MAP.TOOL_NOT_FOUND;
+        return { classification: mapped.classification, code: mapped.code, error: makeError(mapped.klass, mapped.code, mapped.message, tool) };
+      }
+      continue;
+    }
+    if (!runtime.availableTools.includes(tool)) {
+      return {
+        classification: "TOOL_REQUIRED",
+        code: "E_TOOL_UNAVAILABLE",
+        error: makeError("E-TOOL", "E_TOOL_UNAVAILABLE", "required tool is not available to this runtime", tool),
+      };
+    }
   }
   return null;
 }
@@ -397,13 +440,15 @@ function resolveHotkeyImpl(runtime, input) {
   const resolvedState = { validated: true, allowed: true, resolved: true };
 
   // 6. Registry-declared tools (12 §2 Tools column) before any dispatch.
-  const missingRecordTool = firstMissing(recordTools(record), runtime.availableTools);
-  if (missingRecordTool !== null) {
+  const recordToolRefusal = gateTools(runtime, recordTools(record));
+  if (recordToolRefusal !== null) {
     return makeResolution({
-      classification: "TOOL_REQUIRED",
-      code: "E_TOOL_UNAVAILABLE",
-      error: makeError("E-TOOL", "E_TOOL_UNAVAILABLE", "required tool is not available to this runtime", missingRecordTool),
-      state: states({ ...resolvedState, tool_unavailable: true }),
+      classification: recordToolRefusal.classification,
+      code: recordToolRefusal.code,
+      error: recordToolRefusal.error,
+      state: recordToolRefusal.classification === "REFUSED"
+        ? states({ ...resolvedState, refused: true })
+        : states({ ...resolvedState, tool_unavailable: true }),
       record,
     });
   }
@@ -438,13 +483,15 @@ function resolveHotkeyImpl(runtime, input) {
   }
 
   // 9. Handler tool requirements (01 §10.1, 03 §4 H5).
-  const missingHandlerTool = firstMissing(handler.requiredTools, runtime.availableTools);
-  if (missingHandlerTool !== null) {
+  const handlerToolRefusal = gateTools(runtime, handler.requiredTools);
+  if (handlerToolRefusal !== null) {
     return makeResolution({
-      classification: "TOOL_REQUIRED",
-      code: "E_TOOL_UNAVAILABLE",
-      error: makeError("E-TOOL", "E_TOOL_UNAVAILABLE", "required tool is not available to this runtime", missingHandlerTool),
-      state: states({ ...resolvedState, tool_unavailable: true }),
+      classification: handlerToolRefusal.classification,
+      code: handlerToolRefusal.code,
+      error: handlerToolRefusal.error,
+      state: handlerToolRefusal.classification === "REFUSED"
+        ? states({ ...resolvedState, refused: true })
+        : states({ ...resolvedState, tool_unavailable: true }),
       record,
       handler,
     });
@@ -676,7 +723,7 @@ function configError(code, message, detail) {
  * An invalid-but-parseable registry produces a runtime whose validation.ok
  * is false: every invocation is refused with E_VALID_REGISTRY_INVALID.
  */
-export function createRuntime({ registryText, root, availableTools, handlers } = {}) {
+export function createRuntime({ registryText, root, availableTools, handlers, toolBus } = {}) {
   if (typeof registryText !== "string") {
     throw configError("E_INPUT_INVALID_RUNTIME_CONFIG", "registryText must be a string", typeof registryText);
   }
@@ -690,6 +737,10 @@ export function createRuntime({ registryText, root, availableTools, handlers } =
   const handlerMap = handlers === undefined ? DEFAULT_HANDLERS : handlers;
   if (!isPlainObject(handlerMap)) {
     throw configError("E_VALID_HANDLER_SPEC", "handlers must be a plain object keyed by command id");
+  }
+  if (toolBus !== undefined && toolBus !== null
+      && (typeof toolBus !== "object" || typeof toolBus.check !== "function")) {
+    throw configError("E_INPUT_INVALID_RUNTIME_CONFIG", "toolBus must expose check(capabilityId)");
   }
 
   // Handler binding: the map key IS the dispatch key, so a handler whose
@@ -735,6 +786,7 @@ export function createRuntime({ registryText, root, availableTools, handlers } =
     root,
     validation,
     availableTools: Object.freeze([...tools]),
+    toolBus: toolBus ?? null,
     handlers: Object.freeze(handlersByCommand),
     byKey,
     byCommand,

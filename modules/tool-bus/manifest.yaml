@@ -1,0 +1,25 @@
+# Grimoire v3 — Tool Bus (L1 Core Service) module manifest
+# Schema: docs/v3/03-extension-contract.md §2 (field set is normative; no fields beyond it).
+id: "tool-bus"
+version: "1.0.0"
+core: ">=3.0 <4.0"
+name: "Tool Bus"
+purpose: "Register, validate, resolve, check, and invoke declared tool capabilities behind a deterministic fail-closed boundary between Core Services and modules; expose capability/provider/dependency state as a machine-testable report without ever fabricating a capability."
+phases:
+  - RUN
+requires:
+  tools: ["files"]
+provides:
+  - "toolbus:capabilities"
+consumes: []
+conflicts: []
+outputs:
+  - "tool-bus-report"
+errors:
+  - E-INPUT
+  - E-ENV
+  - E-CONFLICT
+  - E-TOOL
+  - E-VALID
+  - E-UNKNOWN
+entry: "modules/tool-bus/src/bus.mjs"
