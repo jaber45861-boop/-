@@ -1,10 +1,10 @@
 # Grimoire v3 — L2 Hotkeys module manifest
 # Schema: docs/v3/03-extension-contract.md §2 (field set is normative; no fields beyond it).
 id: "hotkeys"
-version: "1.0.0"
+version: "1.1.0"
 core: ">=3.0 <4.0"
 name: "Hotkeys"
-purpose: "Load the L3 hotkey registry, validate every record against the Extension Contract, apply the activation gate (ACTIVE only), and emit a deterministic validation report — without executing any hotkey."
+purpose: "Load the L3 hotkey registry, validate every record against the Extension Contract, apply the activation gate (ACTIVE only), emit a deterministic validation report, and dispatch runtime handlers for gate-authorized records only — fail closed at every step; records without a handler or without their required tools are reported, never guessed."
 phases:
   - RUN
   - TEST
@@ -14,13 +14,16 @@ requires:
 provides:
   - "hotkeys:validate"
   - "hotkeys:activation-gate"
+  - "hotkeys:execute"
 consumes: []
 conflicts: []
 outputs:
   - "hotkey-validation-report"
+  - "hotkey-runtime-result"
 errors:
   - E-INPUT
   - E-ENV
+  - E-CONFLICT
   - E-TOOL
   - E-VALID
   - E-UNKNOWN

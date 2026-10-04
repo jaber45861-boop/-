@@ -302,3 +302,181 @@ All run against `12-hotkey-registry.md`, cross-checked with `08` §4/§6, `04` �
 *Pass criteria:* zero modified source files; 18/18 hashes match. Any drift = fail (critical).
 
 **Task 04 release gate:** HK-01…HK-10 all pass with real records; Groups A/D/F/G/M still pass unchanged; Core `01`–`04` byte-unchanged; source unchanged (HK-10); no runtime code added (file set = Task 03's 31 files + `12` + `13` = 33); no hotkey activated from a recommendation; [R]/[M] tests still NOT RUN (GAP-007).
+
+---
+
+## Group I — Hotkeys L2 Module Tests (added Task 05; spec: `12` §6, `03` §5/§6, `04` §2)
+
+Executable with `node --test` from the repo root (35 tests, 6 suites). Files:
+`test/hkc-gate.test.mjs` (gate duties HKC-03…HKC-08, the HKC-16 mutation
+suite, supporting negatives) and `test/hkc-coverage.test.mjs` (loader duties,
+report, integration path, integrity). Mutation fixtures live in
+`test/_fixtures/*.txt`; the suite asserts each fixture is **byte-different
+from `12`** before trusting it — a fixture identical to the registry cannot
+prove fail-closed behavior. Module: `modules/hotkeys/` (manifest + `src/loader.mjs`,
+`src/gate.mjs`, `src/report.mjs`, `src/errors.mjs`).
+
+**HKC-01 Record coverage**
+*Scenario:* Load `12` with the L2 loader; count records per section against the §2/§3/§4 declared counts.
+*Pass criteria:* 48 records (43 Grimoire + 5 external), accepted 48 / rejected 0, zero violations. *Test:* `HKC-01` (`test/hkc-coverage.test.mjs`).
+
+**HKC-02 No silent disappearance**
+*Scenario:* For every loaded record read key + Activation status + Validation status; compare with the enums in `12` §1.2/§1.3.
+*Pass criteria:* 48/48 records carry one of the seven activation and one of the five validation statuses; 48 distinct keys; nothing dropped. *Test:* `HKC-02` (`test/hkc-coverage.test.mjs`).
+
+**HKC-03 ACTIVE gate accepts exactly the validated actives**
+*Scenario:* Run the activation gate over the pristine registry.
+*Pass criteria:* exactly 14 ALLOW (all ACTIVE + VALIDATED, zero violations) and 34 REFUSE; ACTIVE record count = 14. *Test:* `HKC-03` (`test/hkc-gate.test.mjs`).
+
+**HKC-04 Adapter-required records reference a declared adapter**
+*Scenario:* For every `ADAPTER_REQUIRED` record read the Adapter cell; cross-check `12` §4 declarations; gate each record.
+*Pass criteria:* exactly 10 such records; each names a declared adapter id; every one REFUSED by the gate (no path to activation). *Test:* `HKC-04` (`test/hkc-gate.test.mjs`).
+
+**HKC-05 Adapter-required without reference refuses**
+*Scenario:* Remove the adapter reference from `KT` (fixture `mut_adapter_missing.txt`); validate, then gate.
+*Pass criteria:* loader flags `adapter_ref_missing`; gate REFUSEs with the exact reason `ADAPTER_REQUIRED record carries no adapter reference`. *Test:* `HKC-05` (`test/hkc-gate.test.mjs`).
+
+**HKC-06 Blocked-conflict/ambiguous refuse with pending-ruling reason**
+*Scenario:* Gate every `BLOCKED_CONFLICT` and `BLOCKED_AMBIGUOUS` record.
+*Pass criteria:* 5 + 5 records, each REFUSEd with the exact `… must not execute (awaits executive ruling)` reason; none ALLOW. *Test:* `HKC-06` (`test/hkc-gate.test.mjs`).
+
+**HKC-07 Insufficient-information records refuse with pending-evidence reason**
+*Scenario:* Gate every `BLOCKED_INSUFFICIENT_INFO` record.
+*Pass criteria:* exactly 3 (F, VV, google), each REFUSEd with the exact `… (awaits evidence)` reason. *Test:* `HKC-07` (`test/hkc-gate.test.mjs`).
+
+**HKC-08 Historical/metadata records refuse as commands**
+*Scenario:* Gate every `HISTORICAL_REMOVED` and `METADATA_ONLY` record.
+*Pass criteria:* exactly 4 historical (I, U, TT, RR) + 7 metadata (2 Grimoire + 5 external), each REFUSEd with its exact reason. *Test:* `HKC-08` (`test/hkc-gate.test.mjs`).
+
+**HKC-09 Deterministic parse**
+*Scenario:* Validate `12` twice in the same run; compare records, violations, adapter maps and meta sha256.
+*Pass criteria:* byte-equal results across runs; `meta.sha256` equals the sha256 of the file. *Test:* `HKC-09` (`test/hkc-coverage.test.mjs`).
+
+**HKC-10 Zero duplicate ACTIVE keys**
+*Scenario:* Run duty 8 (duplicate ACTIVE keys) and duty 7 (duplicate command ids) on the pristine registry.
+*Pass criteria:* zero `duplicate_active_key` and zero `duplicate_identity` violations. Detection (not just absence) is proven indirectly by `HKC-16/3`, which injects a duplicate ACTIVE `W` and requires the `duplicate_active_key` violation. *Tests:* `HKC-10` (`test/hkc-coverage.test.mjs`), `HKC-16/3` (`test/hkc-gate.test.mjs`).
+
+**HKC-11 Adapter declarations**
+*Scenario:* Parse `12` §4.
+*Pass criteria:* exactly 10 declarations; ids match `grimoire.adapter.<id>`; every declaration Activation status = `NOT_ACTIVATED (adapter pending)`. *Test:* `HKC-11` (`test/hkc-coverage.test.mjs`).
+
+**HKC-12 Source citations verified**
+*Scenario:* Duty 6 resolves every `file:line` citation (existence, line in range, line non-blank).
+*Pass criteria:* 84 citations checked, zero `source_ref_*` violations. Per-citation enforcement (existence/range/non-blank) is proven indirectly by `HKC-16/4`, which deletes a cited file and requires `source_ref_missing_file`. *Tests:* `HKC-12` (`test/hkc-coverage.test.mjs`), `HKC-16/4` (`test/hkc-gate.test.mjs`).
+
+**HKC-13 Adapter bijection**
+*Scenario:* Count references registered per §4 declaration and per `ADAPTER_REQUIRED` record.
+*Pass criteria:* each of the 10 declarations referenced by exactly one record (total 10); each of the 10 records resolves its declaration; no orphan, no duplicate. *Test:* `HKC-13` (`test/hkc-coverage.test.mjs`).
+
+**HKC-14 Integration path (registry → loader → validation → gate → report)**
+*Scenario:* Execute the full module path in one test: validate `12`, expose only violation-free records to the gate, build the report with `buildReport(parsed, gate)`.
+*Pass criteria:* 48 loaded → 48 exposed → 14 ALLOW / 34 REFUSE; report contains all 10 numbered sections, states the verified counts (48/48/0/10/84/Ok=true) and carries the sha256 of its own bytes; fail-closed composition asserted (a record rejected by validation never reaches ALLOW — with `mut_active_invalid_mode.txt` the ALLOW set drops 14 → 13). *Test:* `HKC-14` (`test/hkc-coverage.test.mjs`).
+
+**HKC-15 Report determinism**
+*Scenario:* Build the report twice from freshly parsed inputs (and again from one shared parsed object).
+*Pass criteria:* identical text and identical sha256 on every rebuild. *Test:* `HKC-15` (`test/hkc-coverage.test.mjs`).
+
+**HKC-16 Mutation suite — all 10 fail closed**
+*Scenario:* Apply each required mutation to a fixture, then validate and (where a record is flipped) gate it. Each test first asserts the fixture is byte-different from `12`.
+*Pass criteria (all 10):* loader returns `ok=false` with the expected violation code, and any record flipped toward activation is REFUSED by the gate or withheld from it:
+
+| # | Mutation | Fixture | Required evidence |
+|---|---|---|---|
+| 1 | ACTIVE → UNKNOWN | `mut_active_unknown.txt` | `invalid_activation_status`; PTn refused (unrecognized status) |
+| 2 | valid Core mode → invalid mode | `mut_active_invalid_mode.txt` | `invalid_mode` on PTn; ALLOW drops 14 → 13 |
+| 3 | duplicate ACTIVE key | `mut_duplicate_active.txt` | `duplicate_active_key` (key `W`) |
+| 4 | removed source anchor | `mut_removed_source.txt` | `source_ref_missing_file` |
+| 5 | removed adapter reference | `mut_removed_adapter.txt` | `adapter_ref_missing` + `adapter_orphan_declaration`; KT refused |
+| 6 | ADAPTER_REQUIRED → ACTIVE | `mut_adapter_to_active.txt` | `status_validation_mismatch` + `adapter_ref_inconsistent` + `adapter_orphan_declaration`; KT refused |
+| 7 | BLOCKED → ACTIVE | `mut_blocked_to_active.txt` | `status_validation_mismatch`; K refused |
+| 8 | removed registry record | `mut_removed_registry.txt` | 47 records; `section_declared_count_mismatch` + `summary_total_mismatch` |
+| 9 | undeclared registry record | `mut_undeclared.txt` | 49 records; `section_declared_count_mismatch` + `summary_total_mismatch` + `summary_status_count_mismatch` |
+| 10 | corrupted registry syntax | `mut_corrupted.txt` | `row_column_count` + `missing_field`; R withheld from the gate |
+
+*Tests:* `HKC-16/1` … `HKC-16/10` (`test/hkc-gate.test.mjs`); supporting fixtures in `HKC-NEG-4/5/7/8/9/11`.
+
+**HKC-17 Integrity (Core + source + registry unchanged)**
+*Scenario:* SHA-256 the protected files and compare with pinned values; re-verify the 18 source files against the `11` §1 truth table.
+*Pass criteria:* Core `01`–`04` match their pinned hashes; `12` matches its pinned hash (`c861b562…10139`); source integrity 18/18. *Tests:* three `HKC-17` assertions (`test/hkc-coverage.test.mjs`).
+
+**Task 05 release gate:** `node --test` = 35/35 pass (6 suites); HKC-01…HKC-17 all covered by a named executable test; 10/10 mutations fail closed; report byte-stable across rebuilds and across processes; registry 48 / ACTIVE 14 / refused 34 / adapters 10 / citations 84; source 18/18; Core `01`–`04` byte-unchanged; `12` byte-unchanged; no hotkey activated (gate only refuses/allow-does-not-execute).
+
+---
+
+## Group J — Hotkeys L2 Runtime Tests (added Task 06; contract: `14-hotkey-runtime.md`)
+
+Executable with `node --test` from the repo root. File: `test/hkc-runtime.test.mjs`
+(23 tests, 5 suites); together with Group I's 35 the suite is **58 tests, 11
+suites**. Module additions: `src/runtime.mjs` (pipeline + report builder),
+`src/handlers.mjs` (handler contract + 3 real handlers). Group I is untouched
+and still passes. The runtime consumes the validated registry through the same
+loader/gate as Group I; no Core or registry byte changed.
+
+**HKR-01 Positive resolution (contract A)**
+*Scenario:* `resolveHotkey` each of the 14 ACTIVE keys (with `args.part` for `PTn`).
+*Pass criteria:* every one reaches `validated + allowed + resolved` with a full §14 trace (key, command, source anchor, statuses, Core mode ∈ `04` §2, handler id, classification, code); exact split EXECUTABLE 3 / UNIMPLEMENTED 10 / TOOL_REQUIRED 1; key set equals the canonical 14. *Test:* `HKR-01`.
+
+**HKR-02 Gate enforcement (contract B)**
+*Scenario:* Execute all 34 non-ACTIVE records with a spy handler registered for every Grimoire command.
+*Pass criteria:* each REFUSED with its status's `E_CONFLICT_*` code, `executed=false`, no artifacts; total handler runs = 0 (zero non-ACTIVE executions). *Test:* `HKR-02`.
+
+**HKR-03 Unknown input (contract C)**
+*Scenario:* Invoke unknown keys and commands.
+*Pass criteria:* `REFUSED` with `E_INPUT_UNKNOWN_KEY`/`E_INPUT_UNKNOWN_COMMAND`, trace null, nothing dispatched. *Test:* `HKR-03`.
+
+**HKR-04 Missing handler (contract D)**
+*Scenario:* Execute ACTIVE records that have no handler (`W`, `Pi`, `Q`, …).
+*Pass criteria:* `UNIMPLEMENTED` / `E_ENV_HANDLER_MISSING` (class `E-ENV`), `status=blocked`, remaining issue names the command; never upgraded to execution. *Test:* `HKR-04`.
+
+**HKR-05 Handler execution (contract E)**
+*Scenario:* Execute `R`, `PN`, and `PTn` (parts 1 and 4).
+*Pass criteria:* `success`, output equals the real file bytes + sha256 (`Part4_AllLessons.md` for part 4), correct handler id, artifact `hotkey-runtime-result:<command>`. *Test:* `HKR-05`.
+
+**HKR-06 Tool failure (contract F)**
+*Scenario:* `SoS` (record needs `search providers`) and the `R` handler with `availableTools: []` (handler needs `files`).
+*Pass criteria:* `TOOL_REQUIRED` / `E_TOOL_UNAVAILABLE` (class `E-TOOL`), `status=blocked`, handler never runs. *Test:* `HKR-06`.
+
+**HKR-07 Handler exception (contract G)**
+*Scenario:* Replace `PN`'s handler with one that throws; execute twice.
+*Pass criteria:* `EXECUTION_ERROR` with a classified code (`E_UNKNOWN_EXCEPTION`), `execution_failed=true`, no artifact, byte-identical structured results across reruns. *Test:* `HKR-07`.
+
+**HKR-08 Resolver purity (contract H)**
+*Scenario:* Resolve all 14 (plus repeats) with counting handlers; then execute one authorized resolution and one refused resolution.
+*Pass criteria:* all counters 0 after resolution; exactly 1 run after `executeResolvedHotkey(authorized)`; the refused resolution echoes with `executed=false`. *Test:* `HKR-08`.
+
+**HKR-09 Fail closed (contract I)**
+*Scenario:* Corrupt and empty registries; malformed configurations; 10 malformed invocation shapes.
+*Pass criteria:* invalid registries refuse every invocation with `E_VALID_REGISTRY_INVALID`; bad configs throw at construction (no runtime ⇒ no execution); malformed inputs are `INVALID_INPUT` with their exact code; zero handler runs. *Test:* `HKR-09`.
+
+**HKR-10 Determinism (contract J)**
+*Scenario:* Two runtimes, nine identical inputs; JSON-level and report-level comparison.
+*Pass criteria:* `deepStrictEqual` results and resolutions; no timestamps/uuid-like ids in output; byte-identical reports. *Test:* `HKR-10`.
+
+**HKR-11 Mutation suite — all 10 fail safely**
+*Scenario:* Apply each required runtime mutation (registry-text mutations are asserted byte-different from `12`).
+*Pass criteria (all 10):*
+
+| # | Mutation | Required evidence |
+|---|---|---|
+| 1 | ACTIVE → BLOCKED | validation ok; gate alone refuses `E_CONFLICT_BLOCKED_CONFLICT`; spy run 0 |
+| 2 | ACTIVE → ADAPTER_REQUIRED | `adapter_ref_missing` → `E_VALID_REGISTRY_INVALID`; spy run 0 |
+| 3 | ACTIVE → UNKNOWN | `invalid_activation_status` → whole runtime refuses; all spies 0 |
+| 4 | unknown key injection | `E_INPUT_UNKNOWN_KEY`, trace null, spies 0 |
+| 5 | unknown command injection | `E_INPUT_UNKNOWN_COMMAND`, trace null, spies 0 |
+| 6 | handler removal | `UNIMPLEMENTED` / `E_ENV_HANDLER_MISSING`, run 0; other handlers intact |
+| 7 | handler replacement (mis-bound) | construction throws `E_VALID_HANDLER_SPEC`; impostor run 0 |
+| 8 | malformed invocation (8 shapes) | each `INVALID_INPUT` with exact code; total runs 0 |
+| 9 | invalid registry | `mut_active_invalid_mode.txt` (byte-different); all invocations refused; spies 0 |
+| 10 | unauthorized fallback handler | gate refuses blocked record's handler (run 0); fallback never substitutes (`W` → `UNIMPLEMENTED`); forged resolution → `E_VALID_UNAUTHORIZED_RESOLUTION`; all runs 0 |
+
+*Tests:* `HKR-11/1` … `HKR-11/10`.
+
+**HKR-12/13/14 Traceability, reporting, ambiguous identity**
+*Scenario:* Inspect trace fields and the `03` §5 result structure; rebuild the runtime report; collide two non-ACTIVE keys.
+*Pass criteria:* trace carries exactly the nine §14 fields; every emitted code ∈ `RESULT_CODES` with its documented Core class; report byte-stable with all six classification counts and nine distinct state flags; shared key → `E_CONFLICT_AMBIGUOUS_IDENTITY` (never silently resolved). *Tests:* `HKR-12`, `HKR-13`, `HKR-14`.
+
+**Task 06 release gate:** `node --test` = 58/58 pass (11 suites, 0 skipped);
+HKR-01…HKR-14 all covered by a named executable test; 10/10 runtime mutations
+fail safely; zero non-ACTIVE executions; resolver purity proven; Core `01`–`04`
+byte-unchanged; `12` byte-unchanged; source 18/18; Task 05's 35 tests still
+pass; git state reported, nothing committed.

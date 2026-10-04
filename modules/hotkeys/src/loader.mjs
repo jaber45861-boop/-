@@ -397,6 +397,21 @@ function validateStatuses(record, violations) {
 }
 
 function validateMode(record, violations) {
+  // Structural absence: the external table has no Mode column at all, so its
+  // records carry mode = null by design (12 §3: "no mode routing" for external
+  // records). Absence is only a violation when the record claims to be ACTIVE,
+  // which always requires one of the nine Core modes (04 §2).
+  if (record.mode === null) {
+    if (record.activation_status === "ACTIVE") {
+      const v = violation("invalid_mode", "record", {
+        section: record.section, record: record.key, field: "mode",
+        message: `ACTIVE record mode ${JSON.stringify(record.mode)} is not one of the nine Core modes (04 §2)`,
+      });
+      violations.push(v);
+      record.violations.push(v.code);
+    }
+    return;
+  }
   if (record.mode === undefined) return;
   const inNine = NINE_MODES.includes(record.mode);
   const exempt = record.mode === "—" || /^N\/A\b/.test(record.mode) || /^UNKNOWN\b/.test(record.mode);

@@ -19,6 +19,9 @@ Task 01 deliverable: the Core specification for Grimoire v3.
 | 11 | [Source Integrity](docs/v3/11-source-integrity.md) | SHA-256, sizes, line counts, truncation/duplicate checks at commit `ad5e268` |
 | 12 | [Hotkey Registry](docs/v3/12-hotkey-registry.md) | 48 registration records (43 Grimoire + 5 external), 7 activation statuses, 10 adapter declarations — registration ≠ activation |
 | 13 | [Hotkey Decision Sheet](docs/v3/13-hotkey-decision-sheet.md) | Advisory rulings for the 13 blocked hotkeys (GAP-017 ×10, GAP-009 ×3) — recommendations are not decisions |
+| 14 | [Hotkeys L2 module](modules/hotkeys/manifest.yaml) | Registry loader (10 duties) + ACTIVE-only activation gate + byte-stable report builder + fail-closed runtime executor (`executeHotkey`) — registration ≠ activation, execution only after the gate |
+| 15 | [Hotkey module tests](test/) | HKC-01…HKC-17 + HKR-01…HKR-14 executable coverage, 10 + 10 fail-closed mutation suites (`node --test`, 58 tests) |
+| 16 | [Hotkey Runtime Contract](docs/v3/14-hotkey-runtime.md) | `executeHotkey` pipeline, execution states + result-code table, handler contract, 14 ACTIVE resolution results, known limitations |
 | — | [Migration extractor](scripts/migration-extract.sh) | Deterministic fact extraction (MIG-01…MIG-10) |
 
 **Read order:** 01 → 02 → 03 → 04 → 05.

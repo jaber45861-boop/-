@@ -14,16 +14,23 @@ export const CORE_ERROR_CLASSES = Object.freeze([
 
 // Declared in modules/hotkeys/manifest.yaml (`errors:`) — every failure this
 // module can raise maps into exactly one of these:
-//   E-INPUT   invalid invocation (bad argument types/options)
-//   E-ENV     required input file absent from the environment (ENOENT)
-//   E-TOOL    file-read tool failed on an existing target (EISDIR/EACCES/…)
-//   E-VALID   any registry/manifest validation failure (fail closed)
-//   E-UNKNOWN unclassifiable exception (01 §11.1: classify before fixing)
-// E-DEP and E-CONFLICT are never raisable here: the module calls no external
-// API/service and arbitrates no request conflict.
+//   E-INPUT    invalid invocation (bad argument types/options, unknown key/
+//              command) or malformed invocation fields
+//   E-ENV      required input file absent from the environment (ENOENT), or
+//              a required runtime handler absent (E_ENV_HANDLER_MISSING)
+//   E-CONFLICT invocation conflicts with the registry's activation ruling
+//              (12 §6): the runtime refuses and presents the conflict — it
+//              never silently picks a side (added with the Task 06 runtime)
+//   E-TOOL     file-read tool failed on an existing target (EISDIR/EACCES/…),
+//              or a declared tool is unavailable (E_TOOL_UNAVAILABLE)
+//   E-VALID    any registry/manifest validation failure, including an
+//              unauthorized/forged resolution (fail closed)
+//   E-UNKNOWN  unclassifiable exception (01 §11.1: classify before fixing)
+// E-DEP is never raisable here: the module calls no external API/service.
 export const MODULE_ERROR_CLASSES = Object.freeze([
   "E-INPUT",
   "E-ENV",
+  "E-CONFLICT",
   "E-TOOL",
   "E-VALID",
   "E-UNKNOWN",

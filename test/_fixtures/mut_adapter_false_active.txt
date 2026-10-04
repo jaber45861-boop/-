@@ -1,0 +1,184 @@
+# Grimoire v3 — Hotkey Registry (L3 binding data)
+
+**Status:** Task 04 Phases 1–8 — first v3 hotkey registration dataset.
+**Source of record:** legacy commit `ad5e268` · classification source `08-hotkey-migration-map.md` · Core contract `03` §4 (H1–H7) · modes `04` §2 · error classes `01` §11.
+**Verification:** 2026-10-03, committed tree `ad5e26814170fb4dbb2b4fa4667e730b0f61c63a`, 18/18 source files SHA-256-verified against `11` §1 (HK-10) — source untouched.
+**Storage format:** `03` §8 mandates no storage format or language — this file is the conformant L3 binding-data store. No Core file was modified to accommodate it.
+
+> **REGISTRATION ≠ ACTIVATION.** Every legacy hotkey below is *registered* with its original source meaning preserved verbatim. Registration never implies enablement: blocked records cannot execute, adapters gate the operation hotkeys, and this dataset builds no runtime (GAP-007). No ambiguity is resolved, no conflict is decided, and no behavior is invented here — executive rulings live in `13-hotkey-decision-sheet.md`.
+
+---
+
+## 1. Registration schema (Phase 1)
+
+Conceptual structure per directive: identity → source → mode → behavior → tools → adapter → activation status → validation status.
+
+### 1.1 Fields and H1–H7 mapping
+
+| Registry column | Extension Contract field (`03` §4) | Rule |
+|---|---|---|
+| Command | `command` (H1, H3 unique) | verbatim from `08` §4 v3 command column |
+| Name | `name` (H1) | source name; `—` = empty-but-present (H1: "required even if empty") — never invented |
+| Purpose (source) | `purpose` (H1) | verbatim source purpose |
+| Trigger | `trigger` (H1) | the legacy key chord / syntax, recorded not bound |
+| Behavior + Mode | `behavior` (H1, H2) | source behavior + a `04` §2 Core mode (or explicit exemption) |
+| Output | `output` (H1) | source-declared result |
+| Tools | `requires.tools` (H1, H5) | declared or `none` |
+| Adapter | (binding metadata) | `§4` declaration id when the adapter isolates legacy behavior |
+| Source | (traceability, HK-08) | `file:line` anchors, validated against the working tree |
+| Activation status | §1.2 | one of seven directive statuses |
+| Validation status | §1.3 | registration-readiness derived from activation status |
+
+### 1.2 Activation statuses (the seven)
+
+| Status | Meaning | Execution rule |
+|---|---|---|
+| `ACTIVE` | Validated, unblocked registration; binding enabled in this dataset | may be enabled by a conformant runtime without further rulings or components |
+| `ADAPTER_REQUIRED` | Legacy operation isolated behind an adapter (§4) | must NOT enable until the adapter exists — VALIDATE fails closed |
+| `BLOCKED_CONFLICT` | Source self-contradicts; meaning preserved | must NOT execute — awaiting executive ruling (`13`) |
+| `BLOCKED_AMBIGUOUS` | Identity/behavior overlap; nothing inferred | must NOT execute — awaiting executive ruling (`13`) |
+| `BLOCKED_INSUFFICIENT_INFO` | H1 fields not derivable from source | must NOT execute — awaiting evidence (`13` §Evidence requests) |
+| `HISTORICAL_REMOVED` | Removed/renamed in source; kept for history | never exposed as a command; never deleted from this registry |
+| `METADATA_ONLY` | Not a Grimoire command (grouping notation, trigger syntax, external-tool key) | informational; never registered as a command |
+
+### 1.3 Validation statuses
+
+`VALIDATED` (H1–H7 statically satisfied from source) · `PENDING_ADAPTER` (schema valid; adapter missing) · `PENDING_RULING` (awaiting `13` decision) · `PENDING_EVIDENCE` (awaiting `13` evidence request) · `NOT_APPLICABLE` (record-only: historical/metadata rows).
+
+### 1.4 Activation determination for the 14 compatible hotkeys (Phase 2 condition)
+
+The directive permits `ACTIVE` only if the Extension Contract permits activation without additional runtime dependencies. Checked against the contract:
+
+1. `03` §4 H1–H7 for these 14 are **statically satisfiable from source alone** — all seven fields present, every mode ∈ `04` §2 nine modes, commands unique (H3), no Core file touched (H4), bindings are L3 assets (H7).
+2. `03` §8 mandates no storage format — this dataset registers them without Core changes.
+3. "Additional runtime dependency" tested per hotkey: an **adapter** (none of the 14 need one — that is the `ADAPTER_REQUIRED` class), a tool beyond the universal Tool Bus (13 of 14 declare `tools: none`; `SoS` declares search providers in `requires.tools`, handled per H5 as a trigger-time blocked state, not a registration dependency), or an **executive ruling** (none of the 14 is outstanding).
+4. Therefore the 14 are registered `ACTIVE`. Caveat, stated once and binding: *registry-active ≠ currently executing* — trigger-time execution still flows through the future Hotkeys module (`02` §6: module implementation is future work; GAP-007: no runtime in this repository). This task builds no runtime, per directive.
+
+---
+
+## 2. Registration records — Grimoire hotkeys (43, source order = `08` §4)
+
+| # | Key | Command | Name | Purpose (source) | Behavior | Mode | Output | Tools | Adapter | Source | Trigger | Activation status | Validation status | Notes |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | `K` | `grimoire.key.K` | cmd menu | open command menu | opens hotkey/command menu | TOOL | command menu listing | none | — | `Readme.md:36,147`; `Grimoire.md:99`; `PatchNotes.md:178` | `K` | **BLOCKED_CONFLICT** | PENDING_RULING | **CONFLICT:** also listed in Readme debug row (`Readme.md:41`) but absent from Interludes debug row (`Interludes.md:70`) |
+| 2 | `P` | `grimoire.key.P` | project ideas / traverse | view starter project ideas; traverse Grimoire.md | opens projects/lessons | TEACH | project/lesson content | none | — | `Readme.md:148`; `PatchNotes.md:115,133` | `P` | **BLOCKED_AMBIGUOUS** | PENDING_RULING | **AMBIGUOUS vs PT** (P vs PT both described as opening Projects.md) |
+| 3 | `PT` | `grimoire.key.PT` | open Projects.md | open Projects.md | opens index | TEACH | Projects.md content | none | — | `Grimoire.md:13` | `PT` | **BLOCKED_AMBIGUOUS** | PENDING_RULING | AMBIGUOUS vs P |
+| 4 | `PTn` | `grimoire.key.PTn` | open parts | open parts for full instructions | opens Part n | TEACH | part content | none | — | `Grimoire.md:14,96`; `Projects.md:177`; `PatchNotes.md:78` | `PTn` | **ACTIVE** | VALIDATED | source spans `PT1…PT9` (`Grimoire.md:14`, `Projects.md:177`, `PatchNotes.md:78`) incl. case variant `Pt9` (`PatchNotes.md:78`) |
+| 5 | `Pi` | `grimoire.key.Pi` | open interludes | open interludes | opens Interlude n | TEACH | interlude content | none | — | `Grimoire.md:14,97`; `Projects.md:178` | `Pi` | **ACTIVE** | VALIDATED | — |
+| 6 | `R` | `grimoire.key.R` | Readme | open Readme.md | opens readme | TEACH | readme content | none | — | `Grimoire.md:98`; `Projects.md:180` | `R` | **ACTIVE** | VALIDATED | — |
+| 7 | `PN` | `grimoire.key.PN` | patch notes | open patch notes | opens patch notes | ANSWER | version history | none | — | `Readme.md:150`; `PatchNotes.md:98` | `PN` | **ACTIVE** | VALIDATED | renamed from RR at v2.0.3 (`PatchNotes.md:98`) |
+| 8 | `KT` | `grimoire.key.KT` | GP-Tavern | visit Tavern & meet more GPTs | opens GPTavern | TOOL | Tavern GPT list | external link | `grimoire.adapter.KT` | `Readme.md:149`; `PatchNotes.md:196` | `KT` | **ADAPTER_REQUIRED** | PENDING_ADAPTER | renamed from T at v1.8 (`PatchNotes.md:196`) |
+| 9 | `KY` | `grimoire.key.KY` | recommended tools | open recommended tools | opens tools list | ANSWER | tools list | none | — | `PatchNotes.md:78,197` | `KY` | **BLOCKED_CONFLICT** | PENDING_RULING | **CONFLICT:** tools key also assigned to Y (`PatchNotes.md:197` vs `:264`), Y later removed (`:65`) |
+| 10 | `WASD` | `grimoire.key.WASD` | quick actions (grouping) | Readme "Quick actions" | aggregate notation for W/A/S/D | N/A — aggregate | see rows W, A, S, D | none | — | `Readme.md:38–39` | grouping notation | **METADATA_ONLY** | NOT_APPLICABLE | grouping notation, not a chord |
+| 11 | `W` | `grimoire.key.W` | — | "Go fast" | accelerates output | CODE | faster code output | none | — | `Interludes.md:69`; `PatchNotes.md:138` | `W` | **ACTIVE** | VALIDATED | part of WASD group & debug row |
+| 12 | `A` | `grimoire.key.A` | — | brainstorm & plan approaches | plan/variation generation | PLAN | plan/approach options | none | — | `Interludes.md:74`; `PatchNotes.md:96` | `A` | **ACTIVE** | VALIDATED | in debug rows (`Readme.md:41`, `Interludes.md:70`); modified v2.0.3 |
+| 13 | `S` | `grimoire.key.S` | — | ask for explanations | explanation of current output | TEACH | explanation | none | — | `Readme.md:46` | `S` | **ACTIVE** | VALIDATED | in both debug rows |
+| 14 | `SS` | `grimoire.key.SS` | — | explanations, "Repeat if necessary!" | repeat/extend explanation | TEACH | further explanation | none | — | `Readme.md:46,48`; `Interludes.md:70` | `SS` | **ACTIVE** | VALIDATED | — |
+| 15 | `D` | `grimoire.key.D` | — | brainstorm counterpart of A | plan/variation generation | PLAN | plan/approach options | none | — | `Interludes.md:74`; `PatchNotes.md:139` | `D` | **ACTIVE** | VALIDATED | in both debug rows |
+| 16 | `F` | `grimoire.key.F` | — | UNKNOWN (debug row member only) | not documented beyond row membership | DEBUG | UNKNOWN | none | — | `Readme.md:41`; `Interludes.md:70` | `F` | **BLOCKED_INSUFFICIENT_INFO** | PENDING_EVIDENCE | purpose never stated in source; mode inferred from debug-row membership only |
+| 17 | `G` | `grimoire.key.G` | — | "Save your files as you go! mini Git stage" | saves/stages current files | CODE | saved file snapshot | none | — | `PatchNotes.md:125`; `Interludes.md:70` | `G` | **ACTIVE** | VALIDATED | combined with SoS in "master 12 query search key" (`PatchNotes.md:127`) |
+| 18 | `H` | `grimoire.key.H` | — | print debug lines everywhere; neon UI outlines | injects print/instrumentation | DEBUG | instrumented code / outlines | none | — | `Interludes.md:40,45,70` | `H` | **ACTIVE** | VALIDATED | in both debug rows |
+| 19 | `J` | `grimoire.key.J` | — | force code interpreter | forces code-interpreter path | TOOL | interpreter execution | code interpreter | `grimoire.adapter.J` | `PatchNotes.md:286`; in debug rows (`Readme.md:41`, `Interludes.md:70`) | `J` | **ADAPTER_REQUIRED** | PENDING_ADAPTER | — |
+| 20 | `C` | `grimoire.key.C` | — | Anti-lazy "shut up and code"; print full files | writes code without chatter; prints full files | CODE | full code output | none | — | `Interludes.md:68`; `PatchNotes.md:320,288,79` | `C` | **ACTIVE** | VALIDATED | modified v1.9, v2.0.6 |
+| 21 | `SoS` | `grimoire.key.SoS` | auto searches | write searches automatically (Perplexity, Phind, Stackoverflow, Google) | generates search queries | RESEARCH | suggested searches | search providers | — | `Readme.md:50`; `PatchNotes.md:126`; `Interludes.md:70` | `SoS` | **ACTIVE** | VALIDATED | in both debug rows; combined with G (`PatchNotes.md:127`) |
+| 22 | `N` | `grimoire.key.N` | Netlify auto deploy | 1-button instant site deploy (GPT action, Netlify partner) | auto-deploys current site | TOOL | live site URL; must claim within 1 hour or deleted (`Part1.md:36`) | Netlify GPT action | `grimoire.adapter.N` | `Part1.md:6,15,27,36`; `PatchNotes.md:118`; `Readme.md:43` | `N` | **ADAPTER_REQUIRED** | PENDING_ADAPTER | in Readme Export group |
+| 23 | `ND` | `grimoire.key.ND` | manual netlify deploy | manual deploy via Netlify Drop | opens/guides drag-drop deploy | TOOL | manual deploy flow | Netlify Drop (`https://app.netlify.com/drop`) | `grimoire.adapter.ND` | `Part1.md:17,30`; `PatchNotes.md:124`; `Readme.md:43` | `ND` | **ADAPTER_REQUIRED** | PENDING_ADAPTER | vs NM (below); GAP-015 ruling may add NM as alias — ND record unchanged either way |
+| 24 | `NM` | `grimoire.key.NM` | — | "Manual deploys are available via the NM hotkey using Netlify Drop" | manual Netlify Drop deploy | TOOL | manual deploy flow | Netlify Drop | — | `Part1.md:38` | `NM` | **BLOCKED_CONFLICT** | PENDING_RULING | **CONFLICT:** same function as ND; only this one mention of NM; not repaired (A-register in `07`, GAP-015) |
+| 25 | `REPL` | `grimoire.key.REPL` | — | export code directly to Replit (createRepl operation) | exports project to Replit | TOOL | Replit project link | Replit `createRepl` action | `grimoire.adapter.REPL` | `Part1.md:16,29,65`; `ReplitDeployInstructions.md:1`; `PatchNotes.md:47` | `REPL` | **ADAPTER_REQUIRED** | PENDING_ADAPTER | added v2.3 |
+| 26 | `V` | `grimoire.key.V` | — | codeblock printing | prints code in copyable sections | TOOL | sectioned code output | none | `grimoire.adapter.V` | `PatchNotes.md:303,150`; `Readme.md:43` | `V` | **ADAPTER_REQUIRED** | PENDING_ADAPTER | in Export group |
+| 27 | `L` | `grimoire.key.L` | — | automatically share on Twitter | posts/shared to Twitter | TOOL | share action | Twitter/X | `grimoire.adapter.L` | `PatchNotes.md:311`; tuning `PatchNotes.md:141` | `L` | **ADAPTER_REQUIRED** | PENDING_ADAPTER | in Export group |
+| 28 | `Z` | `grimoire.key.Z` | — | Export (current docs) / undo (history) | current: export+unzip flow (`Part1.md:107`); v1.9 undo added (`:287`), v1.10 undo removed (`:279`) | TOOL | export artifact | none | — | `Readme.md:43`; `Part1.md:107`; `PatchNotes.md:287,279,140` | `Z` | **BLOCKED_AMBIGUOUS** | PENDING_RULING | **AMBIGUOUS:** two documented purposes across versions; which is current not stated |
+| 29 | `XC` | `grimoire.key.XC` | — | export an Xcode template | exports Xcode project template | TOOL | Xcode template | Xcode export operation | `grimoire.adapter.XC` | `Part3.md:140`; `PatchNotes.md:208,142` | `XC` | **ADAPTER_REQUIRED** | PENDING_ADAPTER | tuning-listed as `XC` (`:142`) — the list contains **no plain "X" hotkey** (verified; an earlier draft row "X" was removed as unfounded) |
+| 30 | `PDF` | `grimoire.key.PDF` | — | PDF export | exports as PDF | TOOL | PDF artifact | none | `grimoire.adapter.PDF` | `Readme.md:43`; `PatchNotes.md:220` | `PDF` | **ADAPTER_REQUIRED** | PENDING_ADAPTER | in Export group; split-header version entry v1.16.5 |
+| 31 | `VV` | `grimoire.key.VV` | — | UNKNOWN | "New VV hotkey" only; never removed | UNKNOWN (GAP-009) | UNKNOWN | UNKNOWN | — | `PatchNotes.md:95` | `VV` | **BLOCKED_INSUFFICIENT_INFO** | PENDING_EVIDENCE | — |
+| 32 | `Q` | `grimoire.key.Q` | — | recursive question checking ("Have Grimoire ask you the Questions with Q") | Grimoire asks user questions | TEACH | questions to user | none | — | `PatchNotes.md:130,72` | `Q` | **ACTIVE** | VALIDATED | moved from Y at v2.0 (`PatchNotes.md:130`); previously held browser role (browser moved to B, `:129`) |
+| 33 | `Y` | `grimoire.key.Y` | — | THREE roles across versions: 1) tools (`:264`), 2) fill-in-gaps understanding (`:193`), 3) high-level plan (`:131`) | see roles | N/A — removed (historical) | n/a | none | — | `PatchNotes.md:193,264,131`; removed `:65` | `Y` | **BLOCKED_CONFLICT** | PENDING_RULING | **CONFLICT:** three distinct behaviors at different versions; removed in v2.1 (`:65`) |
+| 34 | `E` | `grimoire.key.E` | — | "step down and Expand" (abstraction ladder counterpart of Y) | expands/detail-fills plan | PLAN | expanded plan | none | — | `PatchNotes.md:131` | `E` | **BLOCKED_AMBIGUOUS** | PENDING_RULING | never removed, but its partner Y removed in v2.1; current status unstated |
+| 35 | `T` | `grimoire.key.T` | — | THREE roles: 1) recommended tools (`:301`), 2) Tavern (`:196` implies prior T), 3) test cases (`:132`) | see roles | TEST | generated test cases (mode = last-documented role) | none | — | `PatchNotes.md:301,196,132` | `T` | **BLOCKED_CONFLICT** | PENDING_RULING | **CONFLICT:** overloads across versions (tools → tavern → tests) |
+| 36 | `B` | `grimoire.key.B` | — | browser tool (moved from Q at v2.0) | opens/uses browser tool | TOOL | browser results | browser tool | `grimoire.adapter.B` | `PatchNotes.md:129` | `B` | **ADAPTER_REQUIRED** | PENDING_ADAPTER | renamed-in from Q role |
+| 37 | `I` | `grimoire.key.I` | import | recommend libraries, packages, resources, tools | suggests dependencies | N/A — removed (historical) | n/a | none | — | `PatchNotes.md:191`; removed `:65` | `I` | **HISTORICAL_REMOVED** | NOT_APPLICABLE | removed in v2.1; tuning-list `-i` case ambiguity (row `i`) |
+| 38 | `U` | `grimoire.key.U` | intuition | "Help me build my intuition about" | explanatory intuition-building | N/A — removed (historical) | n/a | none | — | `PatchNotes.md:192`; removed `:73` | `U` | **HISTORICAL_REMOVED** | NOT_APPLICABLE | removed in v2.0.7 |
+| 39 | `TT` | `grimoire.key.TT` | — | UNKNOWN | "TT & U hotkeys removed" only mention | N/A — removed (historical) | n/a | none | — | `PatchNotes.md:73` | `TT` | **HISTORICAL_REMOVED** | NOT_APPLICABLE | purpose never stated |
+| 40 | `RR` | `grimoire.key.RR` | release notes | open release notes | opened patch notes | N/A — removed (historical) | n/a | none | — | `PatchNotes.md:302`; renamed `:98` | `RR` | **HISTORICAL_REMOVED** | NOT_APPLICABLE | renamed to PN at v2.0.3 |
+| 41 | `i` | `grimoire.key.i` | — | UNKNOWN — appears only as `-i` in v2.0 tuning list | unknown | UNKNOWN (GAP-009) | UNKNOWN | UNKNOWN | — | `PatchNotes.md:143` | `i` | **BLOCKED_AMBIGUOUS** | PENDING_RULING | **AMBIGUOUS:** case-distinct from I (import, `:191`); same-list keys are uppercase except `i` |
+| 42 | `/backslash` | `grimoire.key./backslash` | force-trigger syntax | force-trigger hotkeys in ambiguous prompts | name-spacing syntax, not a command | N/A — trigger syntax | forced trigger | none | — | `PatchNotes.md:135` | trigger syntax | **METADATA_ONLY** | NOT_APPLICABLE | not a hotkey command; registered as trigger convention |
+| 43 | `google` | `grimoire.key.google` | — | web-search hotkey (single mention: "Fix duplicate google and tools hotkey") | unknown | UNKNOWN (GAP-009) | UNKNOWN | UNKNOWN | — | `PatchNotes.md:264` | `google` | **BLOCKED_INSUFFICIENT_INFO** | PENDING_EVIDENCE | verbatim source spelling is lowercase `google` (`PatchNotes.md:264`); listed capital-G "Google" appears only as an SoS provider (`PatchNotes.md:126`) — relationship unstated |
+
+---
+
+## 3. External-tool records (5 — Phase 8)
+
+External tool keys are **not** Grimoire commands: no `command`, no trigger binding, no mode routing. They are classified under the Extension Contract as curriculum context (`01` §10 tool usage happens inside external products, not through Grimoire). No adapter applies — an adapter bridges legacy behavior into a Core mode, and these keys never enter the Core loop. All five are informational → `METADATA_ONLY`.
+
+| # | Key | Tool | Context (source) | Source | Contract classification | Activation status | Validation status | Adapter |
+|---|---|---|---|---|---|---|---|---|
+| E1 | `Cmd + K` | Cursor.sh | AI commands; terminal variant; projects 41/43/48 | `Part4_AllLessons.md:5,7,14` | `N/A — external tool` (`08` §6) | **METADATA_ONLY** | NOT_APPLICABLE | — |
+| E2 | `Cmd + Shift + L` | Cursor.sh | Sidechat (project 42) | `Part4_AllLessons.md:6` | `N/A — external tool` | **METADATA_ONLY** | NOT_APPLICABLE | — |
+| E3 | `cmd + 9` | Xcode | report navigator in TestFlight flow | `Part3.md:146` | `N/A — external tool` | **METADATA_ONLY** | NOT_APPLICABLE | — |
+| E4 | `cmd + /` | generic IDE | comment toggle protip | `Part7.md:65` | `N/A — external tool` | **METADATA_ONLY** | NOT_APPLICABLE | — |
+| E5 | `arrow keys / WASD` | Pong project | game paddle input | `Part1.md:9` | `N/A — external tool` | **METADATA_ONLY** | NOT_APPLICABLE | — |
+
+---
+
+## 4. Adapter declarations (10 — Phase 3)
+
+An adapter isolates legacy-specific behavior from the Core: the Core sees only `mode: TOOL` plus the declared effect; the adapter owns the micro-behavior, input/output contract, and failure classification (`01` §11 classes). None of these were added to Core — `03` §8 forbids licensing new Core behavior, and none was licensed. **Activation status for every adapter: `NOT_ACTIVATED`** — adapters are declarations, not implementations (`02` §6: module implementation is future work). Until an adapter exists, VALIDATE must fail closed on its hotkey.
+
+| Adapter id | Key (legacy identity) | Core mode | Adapter responsibility (isolated from Core) | Expected input | Expected output | Failure behavior (`01` §11) | Activation status |
+|---|---|---|---|---|---|---|---|
+| `grimoire.adapter.KT` | `KT` — "visit Tavern & meet more GPTs" (`Readme.md:149`; renamed from T `PatchNotes.md:196`) | TOOL | resolve and open the GPTavern link target declared in L3 asset data; report the effect | trigger `KT` + target URL from L3 data | GPTavern content opened; Report Bus evidence = opened URL (`03` §5) | browser/link capability missing → `E-TOOL` (fallback or blocker); network failure → `E-ENV` (state blocker, stop) | ACTIVE |
+| `grimoire.adapter.J` | `J` — "force code interpreter" (`PatchNotes.md:286`) | TOOL | route the current code context through the declared code-interpreter tool instead of the default path | trigger `J` + current code context | interpreter execution result (exit status + output) fed to the active mode | interpreter unavailable → `E-TOOL` blocker; no current code → `E-INPUT` (state missing input) | NOT_ACTIVATED (adapter pending) |
+| `grimoire.adapter.N` | `N` — 1-button Netlify auto deploy (GPT action; 1-hour claim window `Part1.md:36`) | TOOL | invoke the Netlify GPT-action deploy for the current site; carry the claim-window notice into the report | trigger `N` + current site assets | live site URL + "claim within 1 hour" notice | deploy service error → `E-DEP` (≤2 retries then blocker with status text); missing credentials → `E-ENV` | NOT_ACTIVATED (adapter pending) |
+| `grimoire.adapter.ND` | `ND` — manual deploy via Netlify Drop (`Part1.md:17,30`; `PatchNotes.md:124`) | TOOL | open/guide the Netlify Drop drag-drop flow (`https://app.netlify.com/drop`) for the current site | trigger `ND` + current site assets | manual deploy flow opened/guided; report records the step | flow unavailable → `E-TOOL` blocker; GAP-015 ruling may register `NM` as an alias to this adapter (record-level; adapter unchanged) | NOT_ACTIVATED (adapter pending) |
+| `grimoire.adapter.REPL` | `REPL` — export code directly to Replit via `createRepl` (`Part1.md:16,29,65`; `ReplitDeployInstructions.md:1`) | TOOL | perform the Replit `createRepl` export of the current project | trigger `REPL` + project code | Replit project link | Replit service error → `E-DEP` (≤2 retries then blocker); auth missing → `E-ENV` | NOT_ACTIVATED (adapter pending) |
+| `grimoire.adapter.V` | `V` — codeblock printing (`PatchNotes.md:303,150`) | TOOL | render the current code in copyable, sectioned output matching the legacy format | trigger `V` + current code | sectioned code blocks ready to copy | no current code context → `E-INPUT` (state missing input); render failure → `E-VALID` (blocks SHIP) | NOT_ACTIVATED (adapter pending) |
+| `grimoire.adapter.L` | `L` — automatically share on Twitter/X (`PatchNotes.md:311`; tuning `:141`) | TOOL | post the share through the Twitter/X integration declared in `requires.tools` | trigger `L` + current content summary | posted share permalink as report evidence | auth/API error → `E-DEP` (≤2 retries then blocker); tool missing → `E-TOOL` | NOT_ACTIVATED (adapter pending) |
+| `grimoire.adapter.XC` | `XC` — export an Xcode template (`Part3.md:140`; tuning `PatchNotes.md:142`) | TOOL | run the Xcode export operation over the current project | trigger `XC` + current project | Xcode template artifact link | Xcode tooling unavailable → `E-TOOL`; export error → `E-DEP` | NOT_ACTIVATED (adapter pending) |
+| `grimoire.adapter.PDF` | `PDF` — PDF export (`Readme.md:43`; `PatchNotes.md:220`) | TOOL | render current content/code to a PDF artifact | trigger `PDF` + current content | PDF artifact link as report evidence | renderer unavailable → `E-TOOL` blocker | NOT_ACTIVATED (adapter pending) |
+| `grimoire.adapter.B` | `B` — browser tool (role moved from Q at v2.0, `PatchNotes.md:129`) | TOOL | open/use the browser tool and feed observed results back to the active mode | trigger `B` + target/query | browser results verified as Report Bus evidence (`01` §10.3) | browser unavailable → `E-TOOL` (equivalent verified path or blocker) | NOT_ACTIVATED (adapter pending) |
+
+---
+
+## 5. Status summary
+
+| Activation status | Count | Members |
+|---|---|---|
+| `ACTIVE` | **14** | PTn, Pi, R, PN, W, A, S, SS, D, G, H, C, SoS, Q |
+| `ADAPTER_REQUIRED` | **10** | KT, J, N, ND, REPL, V, L, XC, PDF, B |
+| `BLOCKED_CONFLICT` | **5** | K, KY, NM, Y, T |
+| `BLOCKED_AMBIGUOUS` | **5** | P, PT, Z, E, i |
+| `BLOCKED_INSUFFICIENT_INFO` | **3** | F, VV, google |
+| `HISTORICAL_REMOVED` | **4** | I, U, TT, RR |
+| `METADATA_ONLY` | **7** | WASD, /backslash + 5 external-tool rows (§3) |
+| **Total records** | **48** | 43 Grimoire (§2) + 5 external (§3) — matches `08` §1 exactly |
+
+Blocking gate: **13 records** await executive decisions in `13` (10 GAP-017 + 3 GAP-009); **10** await adapters; **0** unresolved records are `ACTIVE`.
+
+---
+
+## 6. Registration status documentation (deliverable 5)
+
+**Provenance.** Records are derived deterministically from `08` §4/§6 (which cite commit `ad5e268`); keys, names, purposes, behaviors, outputs, and sources are verbatim — no rewording, no invented behavior, no resolved conflicts (P1–P5, `06` §4).
+
+**How a runtime must consume this registry (fail-closed rules):**
+
+| Status | VALIDATE | INVOKE |
+|---|---|---|
+| `ACTIVE` | accept (all H1–H7 fields present) | may enable; still produces a standard Completion Report (H6) |
+| `ADAPTER_REQUIRED` | **refuse** unless the referenced adapter id exists and is implemented | never until adapter exists |
+| `BLOCKED_CONFLICT` / `BLOCKED_AMBIGUOUS` / `BLOCKED_INSUFFICIENT_INFO` | **refuse unconditionally** — only an executive ruling recorded in a future task may change the status | never |
+| `HISTORICAL_REMOVED` | refuse as command; keep readable as history | never |
+| `METADATA_ONLY` | refuse as command (informational/convention rows) | never |
+
+**What this dataset does NOT do:** does not activate anything (no runtime exists — GAP-007); does not choose conflict winners (recommendations only — `13`); does not infer missing behavior; does not alter Core `01`–`04` or the Extension Contract; does not modify legacy source.
+
+**Traceability.** Every record carries `Source` (`file:line`); every command id is unique; the §2 row sequence equals the `08` §4 source order (HK-09). Validation tests HK-01…HK-10 are defined in `05-acceptance-tests.md` Group H.
+
+---
+
+## 7. Constraints honored
+
+- Core `01`–`04` byte-unchanged; Extension Contract unchanged (no concrete incompatibility discovered — `03` §8 explicitly permits this storage format).
+- Legacy source untouched (HK-10 verifies SHA-256 against `11` §1).
+- No conflict decided, no ambiguity inferred, no insufficient-info behavior invented, no hotkey renamed or redesigned.
+- No runtime, no autonomous execution, no Task 05 created — this task is DATA + REGISTRATION + VALIDATION.
