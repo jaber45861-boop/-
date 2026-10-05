@@ -16,6 +16,11 @@ export {
   BUNDLE_FIELDS,
 } from "./src/bundle.mjs";
 export {
+  planIdentity,
+  executionIdentity,
+  APPROVAL_VERDICT_FIELDS,
+} from "./src/approval.mjs";
+export {
   CORE_ERROR_CLASSES,
   COMPOSITION_ERROR_CLASSES,
   makeError,

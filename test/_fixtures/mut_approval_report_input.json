@@ -1,0 +1,69 @@
+{
+  "type": "completion",
+  "sections": [
+    {
+      "id": "summary",
+      "rows": [
+        { "name": "Module", "value": "plan-execution" },
+        { "name": "Task", "value": "Add input validation to createUser" },
+        { "name": "Tier", "value": "T2" },
+        { "name": "Depth", "value": "document" },
+        { "name": "Execution", "value": "-" },
+        { "name": "Code", "value": "APPROVAL_REQUIRED" },
+        { "name": "Status", "value": "kinda-done" },
+        { "name": "Stage", "value": "GATE" }
+      ]
+    },
+    {
+      "id": "results",
+      "rows": [
+        {
+          "module": "plan-execution",
+          "command": "plan-execution.execute",
+          "status": "kinda-done",
+          "phase_ledger": [
+            "RECEIVE: done (bundle)",
+            "VALIDATE: done (contract)",
+            "PLAN: done (planner → COMPLETED)",
+            "GATE: refused (APPROVAL_REQUIRED)",
+            "REPORT: done (report-bus)"
+          ],
+          "artifacts": [],
+          "evidence": [
+            "validate(bundle) → ok (contract)",
+            "planner.plan(...) → COMPLETED",
+            "plan.review.required → true (migration)"
+          ],
+          "remaining_issues": [
+            "APPROVAL_REQUIRED: plan review is required before execution (migration) — the approval gate belongs to the policy/approval contract"
+          ],
+          "assumptions": []
+        }
+      ]
+    },
+    {
+      "id": "phase-ledger",
+      "rows": [
+        "RECEIVE: done (bundle)",
+        "VALIDATE: done (contract)",
+        "PLAN: done (planner → COMPLETED)",
+        "GATE: refused (APPROVAL_REQUIRED)",
+        "REPORT: done (report-bus)"
+      ]
+    },
+    {
+      "id": "evidence",
+      "rows": [
+        "validate(bundle) → ok (contract)",
+        "planner.plan(...) → COMPLETED",
+        "plan.review.required → true (migration)"
+      ]
+    },
+    {
+      "id": "remaining-issues",
+      "rows": [
+        "APPROVAL_REQUIRED: plan review is required before execution (migration) — the approval gate belongs to the policy/approval contract"
+      ]
+    }
+  ]
+}

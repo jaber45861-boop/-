@@ -1248,3 +1248,296 @@ translated into execution requests because no contract defines that mapping
 (the `execution` sub-request is caller-supplied); the composer is stateless
 and synchronous, classifies no tiers, and registers nothing; one bundle shape
 and one report type exist by design for this milestone.
+
+**Group Q addendum (CS-13 coordinated amendments — only where contradicted or
+extended; every other Group Q expectation above stands unchanged):**
+
+- **PE-01 (extended):** the entry additionally exports the CS-13 approval
+  vocabulary — `planIdentity`, `executionIdentity`, `APPROVAL_VERDICT_FIELDS`
+  (`23` §8.10, the entire new vocabulary); construction accepts the optional
+  `approval` dependency, and a provided-but-non-conforming value throws
+  `E_INPUT_INVALID_COMPOSITION_CONFIG` with the fixed detail
+  `approval must expose verify()` (absent/`undefined` construct as before).
+  14 result codes, 7 lifecycle stages, `BUNDLE_FIELDS`, and the no-manifest
+  layout are unchanged.
+- **PE-15 (extended):** the call-order/count probe gains the approval axis —
+  `approval.verify` is **0** whenever `review.required === false` (or no
+  component is injected) and **exactly 1** when a component is injected and
+  the plan is gated, asserted with exact equality (never `≥`) in R-15;
+  planner/agent counts and PLAN→ORCHESTRATE ordering are unchanged.
+- **PE-16 (extended):** the source scan now also covers
+  `composition/plan-execution/src/approval.mjs` (5 sources total: `index.mjs`
+  + 4 `src/*.mjs`); every scan rule, the `./`-only import discipline, the
+  frozen exactly-`execute` surface, and the one-build-per-attempt count are
+  unchanged and still green.
+- **Known-limitations note:** "the approval gate … cannot grant it" is
+  superseded *only* for the injected path — the composer still never grants
+  by itself; an affirmative, bound verdict from the composition-root-injected
+  component is what crosses the GATE (`23` §1/§3). PE-05, PE-21, and M4 keep
+  their written expectations for the uninjected path.
+
+---
+
+## Group R — Policy/Approval Tests (added Task 14; corrected Task 14R; contract: `23-policy-approval-contract.md`)
+
+**Status: EXECUTABLE — RUN WITH CS-13 (landed).** These acceptance criteria are pinned
+by the Task 14R correction gate against rulings `22-policy-approval-ruling-record.md`
+(ED-01…ED-12, Change-Set CS-13). The executable file
+`test/policy-approval.test.mjs` and the CS-13 GATE capability shipped **together as
+one coordinated change** (CS-13 items 1/2/4b/5): R-01…R-15, the POS-1…POS-3 /
+NEG-01…NEG-20 matrix, and the R-M fixtures are named executable tests — **41
+tests, 5 suites, 0 skipped, all green** — so the suite is Groups A–Q's **228**
+plus Group R's **41** = **269 tests, 44 suites, 0 failures, 0 skipped**
+(`node --test test/*.test.mjs`). Task 14R corrections applied from the outset:
+**R-10 rewritten (provenance)** and **R-15 strengthened (exact invocation
+counts)**. One recorded conflict: R-07's thenable scenario ("verify returns a
+Promise") is asserted per the authoritative contract §3 step 3 — a thenable is
+not a plain object ⇒ **D1 `approval verdict malformed`** — which R-12 pins the
+same way; the contract governs, and the conflict is recorded in the test file
+header rather than hidden.
+
+**R-01 Configuration and surface (CS-13 items 1–2; PE-01 conventions)**
+*Scenario:* Construct composers without `approval`; with `approval: undefined`;
+with `approval: null`; with `{}`; with `{verify: "no"}`; with a conforming
+`{verify}` stub. Import the entry; scan exports, directory layout, and
+vocabularies.
+*Pass criteria:* absent key and `undefined` construct and behave
+**byte-identically to today** (gated bundle ⇒ detail exactly `plan review is
+required before execution (migration) — the approval gate belongs to the
+policy/approval contract`); each provided-but-non-conforming value throws
+`E_INPUT_INVALID_COMPOSITION_CONFIG` with detail exactly
+`approval must expose verify()`; exports include `planIdentity`,
+`executionIdentity`, `APPROVAL_VERDICT_FIELDS`; `BUNDLE_FIELDS` still exactly
+`[plan, execution]`; exactly 14 result codes; seven lifecycle stages; no
+`manifest.yaml`; layout otherwise unchanged. *Test:* `R-01`.
+
+**R-02 Approval happy path — plan → approval → orchestrate → report (01 §5.2)**
+*Scenario:* The pristine gated bundle (`plan.trigger: "migration"`) with an
+injected stub component returning `{granted: true, plan: <planIdentity of the
+exact gated plan>, execution: <executionIdentity of the exact gated
+execution>}`, through the real Planner/Agent/Report Bus.
+*Pass criteria:* `ok:true`, `COMPLETED` @ `COMPLETE`, `error: null`; counts
+`planner 1 / approval.verify 1 / agent 1`; ledger line exactly
+`GATE: done (approval verified)`; evidence, in order after
+`plan.review.required → true (migration)`: `approval.verify(...) → affirmative`
+then `approval.binding → verified`; three hash-valid reports; composer report
+shows `| Status | COMPLETED |`. *Test:* `R-02`.
+
+**R-03 Absent component = today's frozen refusal (20 §12 rule 6; PE-05/M4)**
+*Scenario:* Gated bundle with no `approval` injected; triggerless bundle with
+no `approval`; re-run the PE-05 and M4 expectations unchanged.
+*Pass criteria:* gated ⇒ `APPROVAL_REQUIRED` / `REFUSED` @ `GATE`, E-INPUT,
+detail byte-identical to the current composer string; approval count **0**;
+agent count **0**; evidence and ledger byte-identical to today's output;
+ungated ⇒ pass with `GATE: done (review not required)`; `PE-05`, `PE-21`, and
+`M4` remain green with their existing expectations untouched. *Test:* `R-03`.
+
+**R-04 Malformed-verdict matrix — well-formed is mechanically testable (contract §3)**
+*Scenario:* An injected component returns each of: `null`, `undefined`, an
+array, the string `"granted"`, `{granted:true}` (missing `plan`/`execution`),
+`{granted:"true"…}`, `{granted:1…}`, `plan` with 63/65 chars / uppercase hex /
+non-hex / non-string, a verdict with a fourth own property, an object whose
+prototype is not `Object.prototype`/`null`, and a verdict whose property getter
+throws.
+*Pass criteria:* every case ⇒ detail exactly `approval verdict malformed`,
+code/status/stage/class `APPROVAL_REQUIRED`/`REFUSED`/`GATE`/`E-INPUT`;
+`approval.verify` count exactly 1; agent count **0**; report present; never
+`| Status | COMPLETED |`. *Test:* `R-04`.
+
+**R-05 Non-affirmative verdict and evaluation order (contract §3 steps 3→4)**
+*Scenario:* `{granted:false, plan:<valid>, execution:<valid>}`; then
+`granted:false` with deliberately wrong bindings.
+*Pass criteria:* both ⇒ detail exactly `approval verdict not affirmative` —
+D2 precedes D3, a non-affirmative verdict never reports a binding detail;
+agent count 0; never completion. *Test:* `R-05`.
+
+**R-06 Binding, canonicalizability, mutation (contract §3 step 6, §4.5; ED-04b/c)**
+*Scenario:* (a) verdict bound to another plan's identity; (b) verdict bound to
+another execution's identity; (c) plan changed by one byte after approval was
+issued (identity differs ⇒ mismatch); (d) execution sub-request swapped for a
+different valid envelope; (e) execution containing `NaN`, `undefined`, or a
+cyclic reference; (f) a stub that mutates `execution` during `verify`.
+*Pass criteria:* (a)–(d) ⇒ detail exactly `approval verdict binding mismatch`;
+(e) ⇒ `approval binding input not canonicalizable`; (f) ⇒ `approval component
+mutated its inputs` (pre-call identities recomputed and compared); all with
+`approval.verify` count exactly 1, agent count **0**, never completion — the
+mismatch rule of ED-04c, fail-closed. *Test:* `R-06`.
+
+**R-07 Component throws — deterministic detail, no exception leakage (contract §3 step 2)**
+*Scenario:* `verify` throws `new Error("boom-" + Date.now())`; `verify` throws
+a string; `verify` returns a Promise (thenable ⇒ not a plain object).
+*Pass criteria:* detail exactly `approval component threw` — no exception
+message, stack, path, or timing appears in the result or report (byte-check:
+report text contains none of the thrown content); count exactly 1; agent 0;
+report present and hash-valid. *Test:* `R-07`.
+
+**R-08 Fail-closed totality — every non-crossing path refuses (01 §13.5; PE-21 extended)**
+*Scenario:* The union of all refusal shapes (D0–D6) alongside the existing
+PE-21 nine-case matrix.
+*Pass criteria:* every approval case `ok:false` with `APPROVAL_REQUIRED` @
+`GATE`; `status` never `COMPLETED`; composer report always present and never
+carries the completion row or the `plan-execution… success` row; no gate is
+ever skipped around; cases with `review.required === false` are unaffected by
+the approval layer (G0 and `05` Group B untouched — ED-10). *Test:* `R-08`.
+
+**R-09 No self-approval — only the injected verdict reaches the decision (22 §6)**
+*Scenario:* Source scans of `composition/plan-execution/index.mjs` + `src/*.mjs`
+and of `modules/planner/**`, `modules/agent/**`; spies on planner and agent
+outputs while feeding a gated bundle.
+*Pass criteria:* the composer source contains no hardcoded grant path (no
+literal verdict constructed inside the composer, no `granted: true` value
+feeding GATE); planner and agent sources mint no approval; planner/agent
+outputs are never read as verdicts — the verdict value is read solely from the
+`approval.verify(...)` return; a plan artifact or orchestration result claiming
+approval changes nothing (still refused); existing PE-16 scans (no `fs`, no
+executors, no module paths) remain green. *Test:* `R-09`.
+
+**R-10 Provenance model — injection authority, output, validation (contract §1; Blocker 1 correction)**
+*Scenario:* (a) two *different* stub components return structurally identical
+verdicts for the same gated bundle; (b) source scan of the whole approval path
+for signature/MAC/credential/token/origin machinery (`createSign`,
+`createVerify`, `createHmac`, `credential`, `bearer`, `token`, `sign(`,
+`verify(` outside `approval.verify`); (c) a provided-but-malformed component
+(construction belt) vs. a conforming component returning a malformed verdict
+(run-time belt); (d) GATE reads: spy every property access the composer makes
+on the verdict.
+*Pass criteria:* (a) both runs produce `deepStrictEqual` results,
+byte-identical reports and equal `sha256` — **no origin metadata is consulted,
+and structurally identical verdicts are behaviorally indistinguishable**;
+(b) **no cryptographic provenance exists anywhere**: the only digest use in
+the path is the pre-approved SHA-256 identity of canonical artifact bytes
+(FIPS 180-4, dependency-free — no `node:crypto` import in the composition
+layer); no signature, MAC, token, credential, or origin field is issued,
+compared, or stored; (c) the runtime performs exactly one boundary check (the
+construction belt, R-01) and thereafter validates **only** the contractual
+schema (§3) and binding rules (§4) — the test asserts the contract's explicit
+non-claim: the runtime makes **no forged-object detection claim** and cannot
+independently or cryptographically detect a forged object; (d) GATE reads
+exactly the three own verdict properties and nothing else — authorization
+authority is stated by contract to enter solely through the approved
+composition-root injection boundary (`22` ED-01/ED-11), which the runtime can
+verify only as interface conformance. *Test:* `R-10`.
+
+**R-11 Canonicalization determinism — golden vectors V1–V3 (contract §4.3)**
+*Scenario:* Compute identities for the three normative vectors (V1 plan with
+jumbled input key order; V2 execution with keys out of order at both levels;
+V3 escaping of `a"b\c<TAB>d`); build two fresh composers over identical inputs;
+source-scan the identity/canonical code.
+*Pass criteria:* digests exactly `e3e8f2a0ed54599f992ae07e24f59a3e98d5edc7495dc48feb515693303b5e68`
+(V1), `25cf3de14674c0ffcbf047abff8a60a3fe4d425e12822d3f279a6333803088c4`
+(V2), `16df91fa6f3838c35e50d271c89d6f56fc805305a2418d1d18ce4d67091f650b`
+(V3); identity independent of object key-insertion order; arrays never
+re-sorted (changes order preserved verbatim — the order question, `19 §13`);
+no `Date.now`, `Math.random`, `process.pid`, `process.env`, locale, or
+machine-path influence in the identity sources (PE-19/PL-19-style scan); no
+`node:crypto`/`require(`/dynamic `import(` in the composition layer (PE-16
+unchanged). *Test:* `R-11`.
+
+**R-12 Verdict-schema mechanics — no coercion, own-properties only (contract §3)**
+*Scenario:* Coercion probes: uppercase hex verdict; `granted: "true"`;
+padded strings (`" true"`); a verdict inheriting `granted` from its prototype;
+a `Promise` verdict; a verdict with an extra property alongside three valid
+ones; a verdict missing exactly one property.
+*Pass criteria:* all refused as `approval verdict malformed` — **no
+lowercasing, no trimming, no type coercion, no inherited properties read**;
+the exactly-three-fields rule holds in both directions (extra ⇒ malformed,
+missing ⇒ malformed). *Test:* `R-12`.
+
+**R-13 Report semantics — verdict recorded, never a fourth report (contract §6)**
+*Scenario:* Capture the composer's completion input for an approval success and
+for each refusal detail D0–D6; count report builds across all attempts.
+*Pass criteria:* five-section shape unchanged; ledger/evidence strings exactly
+as specified (approval pass and uninjected paths byte-distinct as ruled);
+exactly one composer build per attempt; the approval component builds **no**
+report (success still carries exactly three reports: planner, composer, agent);
+every refusal report mirrors code/status/stage/issue (`APPROVAL_REQUIRED: <fixed
+detail>`) and never shows completion. *Test:* `R-13`.
+
+**R-14 End-to-end determinism — same bundle, same verdict, same bytes (22 §7)**
+*Scenario:* Two fresh composers over one gated bundle with one stub verdict
+(success) and one per refusal detail; source scans.
+*Pass criteria:* `deepStrictEqual` results; byte-identical report text and
+equal `sha256` per pair; no timestamps, uuids, or machine paths anywhere in
+output; no time/randomness/PID/environment/hidden-state input in the approval
+evaluation path. *Test:* `R-14`.
+
+**R-15 Invocation counts — explicit observable invariants (contract §5; strengthened per Blocker 4)**
+*Scenario:* Call-recording spies over the full count matrix: invalid bundle;
+planner refusal; triggerless success with and without a component; gated
+success; gated with each refusal D0, D1, D2, D3, D4, D5, D6; then two
+consecutive `execute()` calls on the same composer.
+*Pass criteria:* every count asserted with exact equality (never `≥`):
+`approval.verify` **= 0 whenever `review.required === false`** (no
+pre-consultation, no warm-up, no cached/fallback lookup — and = 0 when no
+component exists to call); `approval.verify` **= exactly 1 whenever
+`review.required === true` with a component injected — for every outcome
+including throws; no retry, no fallback consultation, no hidden second
+invocation, no call at VALIDATE/ORCHESTRATE/REPORT; `planner.plan` = 0 at
+VALIDATE refusal, 1 otherwise; **`agent.run` = 0 on every refusal path and = 1
+only after a successful GATE**; composer `reportBus.build` = 1 per attempt;
+counts independent across consecutive `execute()` calls (no leaked state).
+*Test:* `R-15`.
+
+**Positive and negative case matrix (Task 14 formal acceptance set)**
+
+The rows below are normative acceptance cases for the contract
+(`23-policy-approval-contract.md` §5/§6). Every row states the five required
+fields: INPUT · EXPECTED DECISION · EXPECTED ERROR · EXPECTED AGENT CALL
+COUNT · EXPECTED REPORT BEHAVIOR. DECISION vocabulary: **CROSS** = GATE opens
+and execution proceeds; **REFUSE** = the named refusal at the named stage.
+Counts are per `execute()` call (contract §5); `APPROVAL_REQUIRED` rows are
+code/status/stage/class `APPROVAL_REQUIRED`/`REFUSED`/`GATE`/`E-INPUT` with the
+listed `detail` unless another code is named.
+
+| # | INPUT | EXPECTED DECISION | EXPECTED ERROR | EXPECTED AGENT CALL COUNT | EXPECTED REPORT BEHAVIOR | R-ref |
+|---|---|---|---|---|---|---|
+| **POS-1** | Gated bundle + injected component + verdict `{granted:true, plan:<planIdentity>, execution:<executionIdentity>}` | **CROSS** | none — `error: null`, `COMPLETED` @ `COMPLETE` | 1 | three hash-valid reports; composer `\| Status \| COMPLETED \|`; ledger `GATE: done (approval verified)`; evidence `approval.verify(...) → affirmative`, `approval.binding → verified` | R-02 |
+| **POS-2** | Triggerless bundle, component injected | **CROSS** (ungated) | none | 1 | byte-identical to today's success; ledger `GATE: done (review not required)`; **approval count 0** | R-03, R-15 |
+| **POS-3** | Second consecutive `execute()` on the same composer: gated bundle + a fresh valid verdict | **CROSS** | none | 1 (per call; counts reset) | identical bytes and `sha256` as the first call — stateless, no carried verdict | R-14, R-15 |
+| **NEG-01** missing approval component | Gated bundle, **no `approval` injected** | **REFUSE** (D0) | `APPROVAL_REQUIRED`; detail = today's exact string (`… belongs to the policy/approval contract`) | **0** | refusal report mirrors result; ledger `GATE: refused (APPROVAL_REQUIRED)`; evidence byte-identical to today; never completion (preservation case) | R-03 |
+| **NEG-02** malformed verdict | Component returns `{granted:true, plan:<valid>}` (missing `execution`) | **REFUSE** (D1) | detail `approval verdict malformed` | 0 | refusal report; issue `APPROVAL_REQUIRED: approval verdict malformed`; never completion | R-04 |
+| **NEG-03** non-affirmative verdict | `{granted:false, plan:<valid>, execution:<valid>}` | **REFUSE** (D2) | detail `approval verdict not affirmative` | 0 | refusal report; never completion (D2 precedes any binding detail) | R-05 |
+| **NEG-04** approval throws | `verify` throws (any value) | **REFUSE** (D5) | detail `approval component threw` — thrown content never appears anywhere | 0 | refusal report; never completion | R-07 |
+| **NEG-05** missing plan binding | Verdict without the `plan` field (also `plan:""`/wrong length) | **REFUSE** (D1) | detail `approval verdict malformed` | 0 | refusal report; never completion | R-04 |
+| **NEG-06** incorrect plan digest | Verdict bound to a *different* plan's identity | **REFUSE** (D3) | detail `approval verdict binding mismatch` | 0 | refusal report; never completion | R-06 |
+| **NEG-07** tampered plan | Plan content altered by one byte after approval was issued (recomputed identity differs) | **REFUSE** (D3) | detail `approval verdict binding mismatch` | 0 | refusal report; never completion — any content change forces re-approval | R-06, R-11 |
+| **NEG-08** execution-sub-request mismatch | Valid verdict for plan; `execution` swapped for a different valid envelope | **REFUSE** (D3) | detail `approval verdict binding mismatch` | 0 | refusal report; never completion | R-06 |
+| **NEG-09** forged approval object | Stub planner attaches a forged `approval` object as an extra field on the gated plan artifact; component injected with an otherwise valid verdict | **REFUSE** (D4) | detail `approval binding input not canonicalizable` — forged data is never read as an approval (unknown plan field) | 0 | refusal report; never completion | R-09, R-11 |
+| **NEG-10** planner-generated approval | **No component**; stub planner returns a gated plan carrying an extra `approval:{granted:true,…}` field | **REFUSE** (D0) | detail = today's exact string | 0 | refusal report byte-identical to NEG-01; planner content never consulted as approval | R-09 |
+| **NEG-11** agent-generated approval | **No component**; gated run where agent output *would* claim approval (agent not yet invoked at GATE) | **REFUSE** (D0) | detail = today's exact string | 0 | refusal report; agent never called — its output cannot reach GATE | R-09 |
+| **NEG-12** composer-generated approval | Source scan: composer constructs no verdict internally (no literal grant path); gated bundle, no component | **REFUSE** (D0) | detail = today's exact string | 0 | refusal report; scan assertion proves no self-approval path exists | R-09, R-10 |
+| **NEG-13** self-generated approval | Prebuilt verdict supplied outside the `verify()` channel (e.g. `approval:{verify, verdict}` config property) | **REFUSE** (D0) | detail = today's exact string — only the `verify()` **return value** is ever read | 0 | refusal report; out-of-channel data has no effect | R-09, R-10 |
+| **NEG-14** repeated approval invocation | Component call-count spy over one gated success and one gated refusal | Per-verdict (CROSS or REFUSE) | none / the case's detail | `approval.verify` **exactly 1 — never 2**; agent 1 if CROSS, else 0 | exactly one composer report; no retry evidence line, no second GATE consultation | R-15 |
+| **NEG-15** approval invoked when `review.required === false` | Triggerless bundle with component injected | **CROSS** (unchanged ungated pass) | none | **0** | report as today (`GATE: done (review not required)`) — component never consulted | R-15 |
+| **NEG-16** nondeterministic result | Identical bundle + identical verdict evaluated twice on fresh composers (success and each refusal detail) | Identical DECISION both runs | Identical detail both runs | 1 per run | `deepStrictEqual` results; byte-identical report text; equal `sha256` | R-14, R-11 |
+| **NEG-17** agent called after refusal | Any refusal shape D0–D6 through call-recording spies | **REFUSE** | The case's exact detail | **0** | refusal report present; `orchestration: null`; never completion | R-08, R-15 |
+| **NEG-18** report after invalid gate transition | Refusal at GATE (attempted crossing without valid approval) | **REFUSE** | The case's exact detail | 0 | composer report mirrors `REFUSED` @ `GATE` with issue `APPROVAL_REQUIRED: <detail>`; approval component emits **no** report; no completion row, no success row | R-13, R-08 |
+| **NEG-19** bypass attempt around GATE | Caller appends an `approval` member to the bundle envelope (C1-style bypass) | **REFUSE** at **VALIDATE** | `INVALID_REQUEST`, E-INPUT (strict envelope — approval is never envelope data) | 0 | refusal report @ `VALIDATE`; GATE never reached; no approval evidence line | R-01, PE-06 |
+| **NEG-20** unauthorized change outside CS-13 | Repository diff vs protected pins (Core `01`–`04`/`12`, planner, agent, manifests, runtime) and vs CS-13's exhaustive file list | **PASS** iff changed files ⊆ CS-13; else test failure | none in runtime; assertion names the unauthorized file | 0 (static check — no `execute()`) | no report emitted (static/pin test, HKC-17 pattern) | R-09 scans + release gate |
+
+**R-M mutation fixtures (specification — land atomically with CS-13; each
+asserted byte-different from pristine `composition_request.json` before use;
+fixture names are CONTRACT DETAIL, contract §8.14):**
+
+| Fixture | Exact mutation | Expected failure |
+|---|---|---|
+| `mut_approval_bundle_extra_field.json` | bundle member `approval: {granted:true, plan:"…", execution:"…"}` added (envelope bypass attempt) | `INVALID_REQUEST` (E-INPUT, REFUSED @ VALIDATE, no attempt ran — NEG-19) |
+| `mut_approval_execution_swapped.json` | a second valid execution envelope substituted while the approval binds the original | `APPROVAL_REQUIRED` (E-INPUT, REFUSED @ GATE, detail `approval verdict binding mismatch`, agent 0 — NEG-08) |
+| `mut_approval_report_input.json` | corrupted composer completion input (`status: "kinda-done"`) fed through the real Report Bus on an approval refusal | `REPORT_FAILED` (`report: null`, attempt refusal preserved — PE-M10 pattern) |
+
+Every R-M fixture also asserts: `ok:false`, exact code/status/stage, a
+Core-class error, agent count 0 where GATE refused, a present hash-valid
+refusal report (except the REPORT_FAILED case: `report === null`), and **no
+mutation may ever read as `\| Status \| COMPLETED \|`**.
+
+**Group R release gate (CS-13 landed — status recorded with implementation):**
+
+Executable `R-01…R-15`, the POS/NEG matrix (POS-1…POS-3, NEG-01…NEG-20), and
+the R-M fixtures all green in `test/policy-approval.test.mjs` (plus its
+approval fixtures); Groups A–Q still 228/228 with PE-05,
+PE-21, and M4 untouched; Core `01`–`04` and `12` byte-unchanged; no manifest;
+`node --test test/*.test.mjs` = **269 (228 + Group R 41)**, 0 failures, 0
+skipped. The earlier staging-only "no commit or push" note recorded for Tasks
+14/14R is superseded by the explicit Task 15 executive directive, which
+authorizes committing and pushing this change-set only after every gate above
+passes.

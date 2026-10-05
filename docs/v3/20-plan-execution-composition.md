@@ -32,14 +32,17 @@ Operationally, one bundle flows:
 Bundle {plan, execution}
 → Composer (RECEIVE → VALIDATE)
 → Planner            (PLAN    — planner.plan; its own report attaches)
-→ Approval gate      (GATE    — 01 §5.2 review.required must be false)
+→ Approval gate      (GATE    — 01 §5.2; when review.required the optional
+                       injected approval component is consulted exactly once
+                       and an affirmative verdict bound to this plan and this
+                       execution sub-request crosses — 23 §3/§5)
 → Agent Orchestrator (ORCHESTRATE — agent.run; its own report attaches)
 → Report Bus         (REPORT  — the composer's completion report)
 → COMPLETE → frozen {ok, code, status, stage, error, request, plan,
                      planning, orchestration, report}
 ```
 
-The composer sits **above** both L2 entries and imports none of them: the composition root injects `{planner, agent, reportBus}` at construction. The planner and the agent stay where `02` §3 rule 3 put them — laterally unreachable, independently testable, unchanged (`composition/plan-execution/` imports only `./` files and carries **no manifest**: composition is wiring, not a registered capability).
+The composer sits **above** both L2 entries and imports none of them: the composition root injects `{planner, agent, reportBus, approval}` at construction — `approval` optional (CS-13, `23` §2); absent or `undefined`, the GATE behaves byte-identically to the pre-CS-13 composer. The planner and the agent stay where `02` §3 rule 3 put them — laterally unreachable, independently testable, unchanged (`composition/plan-execution/` imports only `./` files and carries **no manifest**: composition is wiring, not a registered capability).
 
 ## 3. Scope
 
@@ -51,10 +54,11 @@ Implemented under `composition/plan-execution/`:
 | `composition/plan-execution/src/errors.mjs` | The single Core taxonomy (01 §11.1) built locally; the six propagatable/raisable classes |
 | `composition/plan-execution/src/bundle.mjs` | Bundle envelope: `BUNDLE_FIELDS`, `validateBundle`, `normalizeBundle` |
 | `composition/plan-execution/src/composer.mjs` | `LIFECYCLE_STAGES`, `RESULT_CODES`, `createPlanExecutionComposer` — the finite lifecycle itself |
+| `composition/plan-execution/src/approval.mjs` | Approval vocabulary (CS-13): `APPROVAL_VERDICT_FIELDS`, `planIdentity`, `executionIdentity`, the verdict schema belt, and the dependency-free FIPS 180-4 SHA-256 the identities use (`23` §2/§4 — zero imports, keeping the `PE-16` `./`-only scan unchanged) |
 
-Public surface (entry exports): `createPlanExecutionComposer`, `LIFECYCLE_STAGES`, `RESULT_CODES`, `validateBundle`, `normalizeBundle`, `BUNDLE_FIELDS`, `COMPOSITION_ERROR_CLASSES`, `CORE_ERROR_CLASSES`, `makeError`, `isCoreErrorClass`.
+Public surface (entry exports): `createPlanExecutionComposer`, `LIFECYCLE_STAGES`, `RESULT_CODES`, `validateBundle`, `normalizeBundle`, `BUNDLE_FIELDS`, `COMPOSITION_ERROR_CLASSES`, `CORE_ERROR_CLASSES`, `makeError`, `isCoreErrorClass`, plus the CS-13 approval vocabulary `planIdentity`, `executionIdentity`, `APPROVAL_VERDICT_FIELDS` (`23` §8.10 — the entire new vocabulary, nothing else).
 
-`createPlanExecutionComposer({planner, agent, reportBus})` returns a frozen object whose surface is exactly `{ execute(bundle) }`. All three dependencies are required and duck-typed on the one method each owns (`plan`, `run`, `build`); a missing/non-conforming one throws `E_INPUT_INVALID_COMPOSITION_CONFIG` at construction — no composer exists, therefore nothing is composed (`01` §13.5).
+`createPlanExecutionComposer({planner, agent, reportBus, approval})` returns a frozen object whose surface is exactly `{ execute(bundle) }`. The three downstream dependencies are required and duck-typed on the one method each owns (`plan`, `run`, `build`); a missing/non-conforming one throws `E_INPUT_INVALID_COMPOSITION_CONFIG` at construction — no composer exists, therefore nothing is composed (`01` §13.5). The optional `approval` dependency follows the same rule: when its own property is present and not `undefined` it must be a plain object exposing a function `verify`, else construction throws `E_INPUT_INVALID_COMPOSITION_CONFIG` with the fixed detail `approval must expose verify()` (`23` §2); absent and `undefined` both mean *not injected*.
 
 Also added: `test/plan-execution.test.mjs`, `test/_fixtures/composition_request.json` + ten `mut_composition_*.json` fixtures, this document, and Group Q of `docs/v3/05-acceptance-tests.md`.
 
@@ -62,7 +66,7 @@ Also added: `test/plan-execution.test.mjs`, `test/_fixtures/composition_request.
 
 This milestone does NOT provide and explicitly does not implement:
 
-- the **Task 12 Policy/Approval engine** named in `18` §4/§18 and `19` §4/§18 — consuming `review.required` (granting an approval) is that contract's job; this layer only *withholds* execution while the gate stands
+- ~~the **Task 12 Policy/Approval engine** named in `18` §4/§18 and `19` §4/§18~~ — **amended by CS-13:** the engine now exists *as an injected layer* (an optional composition-root component consulted at GATE, `23` §2/§3). What this layer still never does is *grant* an approval itself: the composer only validates the injected verdict (schema + binding, `23` §1); consuming `review.required` into a verdict remains the component's contract, and a gate with no verifiable verdict still withholds execution
 - **translating plan content into execution requests**: neither `18` nor `19` defines a plan→`{kind, module, capability, phase, target}` mapping, so the execution sub-request is supplied by the caller alongside the plan; inventing a mapping would fabricate capability (`01` §13.5)
 - redesign of the Planner or the Agent, memory, retry/loops, persistence, an LLM, UI, scheduling, Git operations
 - a new capability, a new manifest, a registry declaration, a new tool, or a new report type
@@ -98,7 +102,10 @@ PLAN       ──X→ REFUSED/REPORT_FAILED  (INVALID_REQUEST · PLAN_INCOMPLETE
              · REPORT_FAILED — propagated from the planner, plus the
              plan-artifact belts)
   ↓
-GATE       ──X→ REFUSED   (APPROVAL_REQUIRED — 01 §5.2 review gate)
+GATE       ──X→ REFUSED   (APPROVAL_REQUIRED — 01 §5.2 review gate: no
+             injected component, or no well-formed, affirmative verdict bound
+             to this plan AND this execution sub-request — 23 §3/§6; every
+             approval refusal keeps the same code, class, and stage)
   ↓
 ORCHESTRATE ─X→ REFUSED/FAILED  (the agent's twelve codes, propagated)
   ↓
@@ -117,6 +124,7 @@ bundle → validated envelope → planner attempt → plan artifact + gate
 - `planning` (the planner's full result) exists only past PLAN; `plan` (the artifact) exists only when the planner's attempt carried one; `orchestration` (the agent's full result) exists only past ORCHESTRATE; `report` (the composer's own report) exists for every terminal attempt except when the report step itself refuses.
 - `stage` is **the composer's own stage where the terminal state occurred**; the underlying attempt's stage lives inside `planning.stage` / `orchestration.stage` (e.g. a planner report failure surfaces as code `REPORT_FAILED` at composer stage `PLAN`).
 - `status` vocabulary: `COMPLETED` (only with `code: COMPLETED`), `REFUSED`, `FAILED` (orchestration failure), `REPORT_FAILED`.
+- **GATE outcomes (CS-13, `23` §5/§6):** `review.required === false` ⇒ pass (`GATE: done (review not required)`, zero approval consultations — behavior unchanged); `true` with no injected component ⇒ refuse D0 with today's exact detail; `true` with a component ⇒ exactly one `approval.verify(plan, execution)` consultation — an affirmative verdict whose two bindings equal the pre-call identities passes (`GATE: done (approval verified)`), every other outcome refuses with one of the fixed details `approval verdict malformed` / `approval verdict not affirmative` / `approval verdict binding mismatch` / `approval binding input not canonicalizable` / `approval component threw` / `approval component mutated its inputs`.
 
 ## 7. Module Registry integration
 
@@ -165,6 +173,8 @@ One taxonomy only — `01` §11.1 Core classes; no second taxonomy. `RESULT_CODE
 
 Every result carries a structured `error {class, code, message, detail}` (never a string, never a stack) — or `null` for `COMPLETED`.
 
+**`APPROVAL_REQUIRED` detail wording (CS-13 coordinated amendment, `23` §6):** the code/class/status/stage table above is unchanged — still exactly fourteen codes, no new stage, no new error class. The refusal's `detail` now distinguishes seven fixed, variable-free strings: **D0** (component absent — today's byte-identical `plan review is required before execution${trigger} — the approval gate belongs to the policy/approval contract`), **D1** `approval verdict malformed`, **D2** `approval verdict not affirmative`, **D3** `approval verdict binding mismatch`, **D4** `approval binding input not canonicalizable`, **D5** `approval component threw`, **D6** `approval component mutated its inputs`. Evaluation order is fixed: D0 → (one consultation) → D5 → D1 → D2 → D4 → D6 → D3.
+
 ## 12. Fail-closed rules
 
 1. Non-object/extra-field/incomplete bundle → refuse at VALIDATE before any attempt — PE-06/M1.
@@ -172,7 +182,7 @@ Every result carries a structured `error {class, code, message, detail}` (never 
 3. A non-conforming planner attempt (incoherent `ok`/`code`, unknown code) → refuse `PLAN_INCOMPLETE` — PE-07.
 4. A "completed" plan without an artifact, or without its `review` gate state → refuse `PLAN_INCOMPLETE` — PE-07.
 5. A "completed" plan or orchestration without its report → refuse `REPORT_FAILED` — PE-07 ("no valid report → no successful completion").
-6. `plan.review.required === true` → refuse `APPROVAL_REQUIRED`; execution never runs — PE-05/M4 (`01` §5.2).
+6. `plan.review.required === true` → refuse `APPROVAL_REQUIRED`; execution never runs — PE-05/M4 (`01` §5.2). **Verified-approval exception (CS-13 coordinated amendment, `23` §3–§5):** the sole path through this rule is one consultation of the optional injected approval component whose return is a well-formed, affirmative verdict bound to this plan's and this execution sub-request's canonical identities; every other state — no component, a throwing component, a malformed or non-affirmative verdict, a non-canonicalizable binding input, a mismatch, or a component that mutated its inputs — still refuses fail-closed with the fixed detail (Group R, `05`).
 7. A non-conforming orchestration attempt (incoherent `ok`/`code`, or completion without an execution) → refuse, never success — PE-07.
 8. Downstream registry refusals (unknown/disabled module, unavailable/ambiguous capability, undeclared phase, invalid manifest) → propagate — PE-09, M6/M7/M8.
 9. Tool unavailable / blocked / dependency missing → propagate `TOOL_REQUIRED` (E-TOOL) — PE-10.
@@ -189,12 +199,14 @@ Same bundle + same injected state ⇒ same resolution, same lifecycle result, sa
 
 Mechanisms: fixed stage order; fixed evidence/ledger append order; fixed summary/row shapes; no `Date.now`, `Math.random`, pids, `process.env`, machine paths, or unordered iteration affecting output (source-scanned in PE-19). Report `sha256` covers the exact rendered bytes; Task/Tier/Depth/Execution display values are single-line-guarded before rendering.
 
+**Approval determinism (CS-13 coordinated amendment, `23` §4.4):** the approval evaluation adds only admissible inputs — bundle content, the injected component's returned verdict (dependency behavior, same class as planner/agent output), and fixed contract constants. Both identities are pure functions of artifact content (golden vectors V1–V3 pin them); no clock, randomness, PID, environment state, hidden mutable state, cache, or persisted verdict exists anywhere on the path — identical admissible inputs produce identical decisions, bytes, and hashes (R-11/R-14).
+
 ## 14. Security boundaries
 
 - **Entry purity:** `composition/plan-execution/index.mjs` and `src/*.mjs` import only `./` specifiers — no `node:` builtins, no lateral module paths, no `fs`, no `child_process`, no `eval`/`Function`/dynamic import (PE-16 source scan).
 - **Surface:** the composer is frozen and exposes exactly `execute`; exactly one report build per attempt.
-- **DI over construction:** the composer builds neither downstream module — the composition root wires real Planner/Agent instances; each layer stays independently testable (PE-07 exercises the belts against stub contracts without touching the real modules).
-- **No bypass:** the composer holds no registry, tool-bus, or runtime handle at all — source scan asserts no `executeHotkey`/tool-check calls; every gate stays where its authority lives (PE-09/PE-10/PE-21).
+- **DI over construction:** the composer builds neither downstream module — the composition root wires real Planner/Agent instances; each layer stays independently testable (PE-07 exercises the belts against stub contracts without touching the real modules). **The approval component handle joins the DI list (CS-13 explicit amendment, `23` §2):** `approval` is injected the same way — never constructed, imported laterally, or registered — and its only consulted surface is `verify(plan, execution)`; its other properties confer no authority.
+- **No bypass:** the composer holds no registry, tool-bus, or runtime handle at all — source scan asserts no `executeHotkey`/tool-check calls; every gate stays where its authority lives (PE-09/PE-10/PE-21). **Amended by CS-13 (`23` §1/§7):** the verdict value is read solely from the `approval.verify(...)` return — never from the bundle envelope (an `approval` member fails the strict envelope at VALIDATE), never from planner/agent output, never from any composer-constructed literal; the GATE validates exactly the three own verdict fields against schema and binding rules and claims no cryptographic provenance (R-09/R-10).
 - **Core protection:** `01`–`04` and `12` are byte-pinned; the 18 legacy files remain 18/18 (HKC-17). This milestone changed none of them, and no manifest — no Core contradiction was found, so no Core edit was needed.
 
 ## 15. Tests
@@ -227,6 +239,8 @@ Mechanisms: fixed stage order; fixed evidence/ledger append order; fixed summary
 
 Coverage buckets: happy path (PE-02), fail-closed (PE-03…PE-14), integration (PE-15…PE-17), security + determinism (PE-18…PE-21).
 
+**CS-13 coordinated test amendments:** `test/policy-approval.test.mjs` (Group R, `05`) adds the approval-path coverage — R-01…R-15, the POS-1…POS-3 / NEG-01…NEG-20 matrix, and the three R-M fixtures (41 tests, 5 suites). PE-01 gains additive surface (the three vocabulary exports and the optional-component construction belt), PE-15 gains the approval-count axis (asserted exactly in R-15), and PE-16's scan scope now covers `src/approval.mjs` — all as additive/extended assertions; PE-05, PE-21, and M4 keep their written expectations untouched.
+
 ## 16. Mutation tests
 
 Ten byte-different fixtures under `test/_fixtures/`, each asserted byte-different from the pristine bundle `composition_request.json` before use (M10 additionally content-different from the pristine report input captured on a control run):
@@ -246,9 +260,17 @@ Ten byte-different fixtures under `test/_fixtures/`, each asserted byte-differen
 
 Every mutation also asserts: `ok === false`, exact `code`/`status`/`stage`, a Core-class error in this layer's set, the exact downstream state that ran (planner/orchestration codes, plan-artifact presence), a present and hash-valid composer report (M10: `report === null`), and **no mutation may ever read as `| Status | COMPLETED |`**. Each non-envelope mutation additionally proves the bundle envelope is valid — its own layer refuses it, exactly once, at its own gate.
 
+**R-M approval fixtures (CS-13, `23` §8.14 — same discipline, byte-different asserted):**
+
+| Fixture | Exact mutation | Expected failure |
+|---|---|---|
+| `mut_approval_bundle_extra_field.json` | bundle member `approval: {granted, plan, execution}` added (envelope bypass attempt) | `INVALID_REQUEST` (E-INPUT, REFUSED @ VALIDATE, no attempt ran) |
+| `mut_approval_execution_swapped.json` | a second valid execution envelope substituted while the approval binds the original | `APPROVAL_REQUIRED` (E-INPUT, REFUSED @ GATE, detail `approval verdict binding mismatch`, agent 0) |
+| `mut_approval_report_input.json` | corrupted composer completion input (`status: "kinda-done"`) fed through the real Report Bus on an approval refusal | `REPORT_FAILED` (`report === null`, attempt `APPROVAL_REQUIRED` preserved) |
+
 ## 17. Known limitations
 
-- **The approval gate withholds, it does not approve:** any plan with `review.required` is refused; granting an approval is the Task 12 Policy/Approval engine named in `18`/`19`, which does not exist yet. A gate this layer cannot verify never reads as satisfied.
+- **The approval gate withholds, it does not approve (amended by CS-13):** a plan with `review.required` is still refused unless the optional injected approval component (the Policy/Approval capability named in `18`/`19`, now existing as an injected layer — `23` §2) returns, in exactly one consultation, a well-formed affirmative verdict bound to this plan and this execution sub-request. The composer itself never grants: a gate this layer cannot verify never reads as satisfied — absent, malformed, non-affirmative, non-binding, throwing, or mutating outcomes all refuse with `APPROVAL_REQUIRED` (Group R).
 - **No plan→execution-request translation:** the `execution` sub-request is caller-supplied alongside the `plan`; neither contract defines how plan content maps to `{kind, module, capability, phase, target}`, and inventing one would fabricate capability. What is wired is the ordering and gating the Core demands: plan first, execution only behind a valid, ungated plan.
 - The composer is **stateless** — no session, no plan updating across attempts (`01` §5.5 belongs to a session runner).
 - The tier is still asserted by the caller (G5 classification is the Decision Rules' contract); the composer merely relays it.
@@ -256,7 +278,7 @@ Every mutation also asserts: `ok === false`, exact `code`/`status`/`stage`, a Co
 
 ## 18. Future layers
 
-Belonging to later tasks, explicitly NOT provided here: the Task 12 Policy/Approval engine acting on `review.required`, a contract that maps plan content into execution requests, session-level plan updating (`01` §5.5), tier classification (G5 automation), LLM-assisted planning, memory. This document defines the composition that makes those safe: *no valid bundle → no plan; no valid plan → no execution; an unverifiable approval gate → no execution; no valid report → no successful completion; a plan is never a build (`01` §5.6).*
+Belonging to later tasks, explicitly NOT provided here: ~~the Task 12 Policy/Approval engine acting on `review.required`~~ (**now provided as the injected approval component + GATE validation — CS-13, `23` §2/§3**), a contract that maps plan content into execution requests, session-level plan updating (`01` §5.5), tier classification (G5 automation), LLM-assisted planning, memory. Also still out of scope per `23` §7: any policy artifact, persistence, expiry/clock, revocation, credential/signature machinery, or new result code/stage. This document defines the composition that makes those safe: *no valid bundle → no plan; no valid plan → no execution; an unverifiable approval gate → no execution; no valid report → no successful completion; a plan is never a build (`01` §5.6).*
 
 ## 19. Acceptance mapping
 

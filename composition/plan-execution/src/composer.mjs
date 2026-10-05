@@ -9,12 +9,14 @@
 //   Planner            : plan   (the only plan-production surface)
 //   Agent Orchestrator : run    (the only execution surface)
 //   Report Bus         : build  (the only report format)
+//   Approval           : verify (optional; the only verdict surface)
 //
 // One bundle flows through a finite lifecycle, single pass, no loops:
 //
 //   bundle → VALIDATE (envelope only) → PLAN (planner.plan)
-//          → GATE (01 §5.2 review gate) → ORCHESTRATE (agent.run)
-//          → REPORT → COMPLETE
+//          → GATE (01 §5.2 review gate; when review.required the optional
+//             injected approval component is consulted exactly once, 23 §5)
+//          → ORCHESTRATE (agent.run) → REPORT → COMPLETE
 //
 // Fail-closed contract (01 §13.5): every stage either advances or terminates
 // with a named code; there is no retry, no fallback, no hidden recovery.
@@ -32,6 +34,7 @@
 
 import { makeError, COMPOSITION_ERROR_CLASSES, CORE_ERROR_CLASSES } from "./errors.mjs";
 import { validateBundle, normalizeBundle } from "./bundle.mjs";
+import { planIdentity, executionIdentity, wellFormedVerdict } from "./approval.mjs";
 
 /** The finite lifecycle (post-Task 11 composition contract). No other states exist. */
 export const LIFECYCLE_STAGES = Object.freeze([
@@ -195,13 +198,19 @@ function buildReportInput(state) {
 // ---------------------------------------------------------------------------
 
 /**
- * Create the Plan–Execution composer from the three existing public
- * contracts. All three are required: malformed configuration throws at
- * construction — no composer exists, therefore nothing is composed
- * (01 §13.5). The composition root owns wiring; this layer constructs
- * neither downstream module and discovers nothing on its own.
+ * Create the Plan–Execution composer from the existing public contracts.
+ * The three downstream dependencies are required: malformed configuration
+ * throws at construction — no composer exists, therefore nothing is
+ * composed (01 §13.5). The optional `approval` dependency (CS-13,
+ * contract 23 §2) is the composition root's approval component: when its
+ * own property is present and not undefined it must be a plain object
+ * exposing a function `verify`, or construction throws the same
+ * configuration error as every other bad dependency. The composition root
+ * owns wiring; this layer constructs neither downstream module and
+ * discovers nothing on its own.
  */
-export function createPlanExecutionComposer({ planner, agent, reportBus } = {}) {
+export function createPlanExecutionComposer(options = {}) {
+  const { planner, agent, reportBus, approval } = options;
   for (const [name, value, method] of [
     ["planner", planner, "plan"],
     ["agent", agent, "run"],
@@ -210,6 +219,13 @@ export function createPlanExecutionComposer({ planner, agent, reportBus } = {}) 
     if (!isPlainObject(value) || typeof value[method] !== "function") {
       throw configError(`${name} must expose ${method}()`, `${name}.${method}`);
     }
+  }
+  // Construction belt (23 §2): provided = own property present and not
+  // undefined; absent and `undefined` both mean *not injected*.
+  const approvalInjected =
+    Object.prototype.hasOwnProperty.call(Object(options), "approval") && approval !== undefined;
+  if (approvalInjected && (!isPlainObject(approval) || typeof approval.verify !== "function")) {
+    throw configError("approval must expose verify()", "approval must expose verify()");
   }
 
   const composer = Object.freeze({
@@ -351,15 +367,61 @@ export function createPlanExecutionComposer({ planner, agent, reportBus } = {}) 
           ? ` (${oneLine(plan.review.trigger)})`
           : "";
         evidence.push(`plan.review.required → true${trigger}`);
-        ledger.push("GATE: refused (APPROVAL_REQUIRED)");
-        return finish(
-          "GATE",
-          "APPROVAL_REQUIRED",
-          `plan review is required before execution${trigger} — the approval gate belongs to the policy/approval contract`
-        );
+        // One refusal builder: fixed APPROVAL_REQUIRED/E-INPUT/REFUSED@GATE
+        // (23 §6), with the outcome's exact evidence lines appended after
+        // the `plan.review.required` line — only ever reached from here.
+        const refuseGate = (detail, lines) => {
+          for (const line of lines) evidence.push(line);
+          ledger.push("GATE: refused (APPROVAL_REQUIRED)");
+          return finish("GATE", "APPROVAL_REQUIRED", detail);
+        };
+        // D0 — no injected component: today's byte-identical refusal, zero
+        // consultations, zero approval evidence (23 §2/§6 D0).
+        if (!approvalInjected) {
+          return refuseGate(
+            `plan review is required before execution${trigger} — the approval gate belongs to the policy/approval contract`,
+            []
+          );
+        }
+        // Both identities are computed BEFORE the single consultation and
+        // must be identical AFTER it returns (23 §4.5): null = not
+        // canonicalizable (D4). Exactly one verify() call per gated
+        // attempt — no retry, no fallback, no cache (23 §5).
+        const planBefore = planIdentity(plan);
+        const executionBefore = executionIdentity(bundle.execution);
+        let verdict = null;
+        let componentThrew = false;
+        try {
+          verdict = approval.verify(plan, bundle.execution);
+        } catch {
+          componentThrew = true;
+        }
+        if (componentThrew) {
+          return refuseGate("approval component threw", ["approval.verify(...) → threw"]);
+        }
+        const verdictRead = wellFormedVerdict(verdict);
+        if (verdictRead === null) {
+          return refuseGate("approval verdict malformed", ["approval.verify(...) → malformed"]);
+        }
+        if (verdictRead.granted !== true) {
+          return refuseGate("approval verdict not affirmative", ["approval.verify(...) → non-affirmative"]);
+        }
+        if (planBefore === null || executionBefore === null) {
+          return refuseGate("approval binding input not canonicalizable", ["approval.binding → not canonicalizable"]);
+        }
+        if (planIdentity(plan) !== planBefore || executionIdentity(bundle.execution) !== executionBefore) {
+          return refuseGate("approval component mutated its inputs", ["approval.binding → mutated"]);
+        }
+        if (verdictRead.plan !== planBefore || verdictRead.execution !== executionBefore) {
+          return refuseGate("approval verdict binding mismatch", ["approval.verify(...) → binding-mismatch"]);
+        }
+        evidence.push("approval.verify(...) → affirmative");
+        evidence.push("approval.binding → verified");
+        ledger.push("GATE: done (approval verified)");
+      } else {
+        evidence.push("plan.review.required → false");
+        ledger.push("GATE: done (review not required)");
       }
-      evidence.push("plan.review.required → false");
-      ledger.push("GATE: done (review not required)");
 
       // --- ORCHESTRATE (the agent's attempt, consumed verbatim) -----------
       const orchestrated = agent.run(bundle.execution);
