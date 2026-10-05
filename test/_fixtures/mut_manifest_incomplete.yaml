@@ -1,0 +1,24 @@
+# Grimoire v3 — L2 Hotkeys module manifest (AC-19 mutation fixture)
+# MUTATION: `requires:` and `errors:` blocks removed entirely — an incomplete
+# manifest must fail the VALIDATE stage with named rule violations and must
+# never be enabled or invoked (05 AC-19, 03 §2, 01 §13.5).
+# Schema: docs/v3/03-extension-contract.md §2 (field set is normative; no fields beyond it).
+id: "hotkeys"
+version: "1.1.0"
+core: ">=3.0 <4.0"
+name: "Hotkeys"
+purpose: "Load the L3 hotkey registry, validate every record against the Extension Contract, apply the activation gate (ACTIVE only), emit a deterministic validation report, and dispatch runtime handlers for gate-authorized records only — fail closed at every step; records without a handler or without their required tools are reported, never guessed."
+phases:
+  - RUN
+  - TEST
+  - SHIP
+provides:
+  - "hotkeys:validate"
+  - "hotkeys:activation-gate"
+  - "hotkeys:execute"
+consumes: []
+conflicts: []
+outputs:
+  - "hotkey-validation-report"
+  - "hotkey-runtime-result"
+entry: "modules/hotkeys/index.mjs"

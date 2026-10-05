@@ -25,6 +25,9 @@ Task 01 deliverable: the Core specification for Grimoire v3.
 | 17 | [Tool Bus L1 module](modules/tool-bus/manifest.yaml) | 11 capability declarations (AVAILABLE/UNAVAILABLE/BLOCKED/DISABLED never collapsed) + deterministic fail-closed bus (`register/validate/has/resolve/check/invoke/describe/list`) + `local-files` provider + byte-stable report |
 | 18 | [Tool Bus tests](test/tb-bus.test.mjs) | TB-01…TB-24 executable coverage (`tb-bus` + `tb-runtime`), 5 byte-different fail-closed capability mutations (`node --test`, 83 tests total) |
 | 19 | [Tool Bus Contract](docs/v3/15-tool-bus.md) | Capability model, lifecycle, resolution flow, failure semantics (code → Core class), adapter interaction, runtime integration, determinism, security boundaries, extension rules |
+| 20 | [Module Registry module](modules/module-registry/manifest.yaml) | L1 REGISTER → VALIDATE → ENABLE → INVOKE contract: 13-field manifest validation (`03` §2 M1–M6), the four VALIDATE duties (schema, core range, conflicts, tool availability via Tool Bus), symmetric conflict detection, registry-mediated capability resolution, fail-closed INVOKE gate, byte-stable report |
+| 21 | [Module Registry tests](test/mr-registry.test.mjs) | MR-01…MR-16 executable coverage (AC-19 enforced by code), 5 byte-different manifest mutations (`node --test`, 102 tests total) |
+| 22 | [Module Registry Contract](docs/v3/16-module-registry.md) | Interface, validation duties, execution flow, failure semantics (code → Core class), determinism, testing contract, protected dependencies, known unresolved items |
 | — | [Migration extractor](scripts/migration-extract.sh) | Deterministic fact extraction (MIG-01…MIG-10) |
 
 **Read order:** 01 → 02 → 03 → 04 → 05.

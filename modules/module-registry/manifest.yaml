@@ -1,0 +1,25 @@
+# Grimoire v3 — L1 Module Registry module manifest
+# Schema: docs/v3/03-extension-contract.md §2 (field set is normative; no fields beyond it).
+id: "module-registry"
+version: "1.0.0"
+core: ">=3.0 <4.0"
+name: "Module Registry"
+purpose: "Register module manifests, validate them against the Extension Contract (schema, core version range, conflicts, tool availability), enable only clean conflict-free modules, resolve enabled capabilities for other modules, and refuse invocation outside declared phases or tools — fail closed with a named rule violation; an invalid manifest never runs."
+phases:
+  - RUN
+requires:
+  tools: ["files"]
+provides:
+  - "module-registry:validate"
+  - "module-registry:resolve"
+consumes: ["toolbus:capabilities"]
+conflicts: []
+outputs:
+  - "module-registry-report"
+errors:
+  - E-INPUT
+  - E-ENV
+  - E-CONFLICT
+  - E-TOOL
+  - E-VALID
+entry: "modules/module-registry/index.mjs"

@@ -601,3 +601,105 @@ Core `01`–`04` byte-unchanged; `12` byte-unchanged; source 18/18; Task 05/06's
 adapter-backed capabilities are `BLOCKED` (`12` §4 remains `NOT_ACTIVATED`);
 `DISABLED` exists only in mutation TB-21; no invocation log is persisted; the
 bus gates tools only and never invents handler behavior.
+
+---
+
+## Group L — Module Registry Tests (added Task 08; contract: `16-module-registry.md`)
+
+Executable with `node --test` from the repo root. File:
+`test/mr-registry.test.mjs` (19 tests, 4 suites); together with Groups A–K's
+83 the suite is **102 tests, 19 suites**. New module:
+`modules/module-registry/` (L1: `manifest.yaml`, `src/manifest.mjs` YAML-subset
+parser + §2/M1–M6 validators, `src/registry.mjs` REGISTER→VALIDATE→ENABLE→
+INVOKE contract + report builder, `src/errors.mjs`, `index.mjs` entry). Groups
+I/J/K and the 83 prior tests are untouched and still pass; Core `01`–`04`,
+`12`, and the 18 source files are unchanged. This group makes the previously
+spec-only acceptance tests AC-19 (and the executable reading of AC-17)
+enforced by code.
+
+**MR-01 Registration (03 §3 REGISTER)**
+*Scenario:* Register `hotkeys`, `tool-bus`, and `module-registry` manifests (read from their real files); describe each.
+*Pass criteria:* all register `MR_OK`; `list()` preserves registration order; descriptors carry exactly the §2 field set + `enabled` + live `violations`; the registry's own manifest validates itself clean. *Test:* `MR-01`.
+
+**MR-02 Duplicate ids fail closed**
+*Scenario:* Register the same manifest twice in one registry (and a different first module in a second registry).
+*Pass criteria:* `MODULE_DUPLICATE` (`E-CONFLICT`), no overwrite, original descriptor byte-equal, no cross-registry interference. *Test:* `MR-02`.
+
+**MR-03 Invalid documents fail closed at register**
+*Scenario:* Submit a non-string, an unparseable document, a document without `id`, and `id: []`.
+*Pass criteria:* `INVALID_INVOCATION` (E-INPUT) / `MANIFEST_INVALID` (E-VALID) with named violations where parseable; registry stays empty. *Test:* `MR-03`.
+
+**MR-04 Unknown module refuses on every surface**
+*Scenario:* validate/enable/disable/canInvoke/describe an unregistered id; pass malformed canInvoke input.
+*Pass criteria:* every surface → `MODULE_NOT_FOUND` (E-INPUT); input shape is checked before lookup (`INVALID_INVOCATION`). *Test:* `MR-04`.
+
+**MR-05 VALIDATE clean on real inputs (03 §3 duties)**
+*Scenario:* `validateAll()` over the three real manifests, twice.
+*Pass criteria:* `ok=true`, every module `MR_OK` with zero violations; repeated call deep-equal (deterministic). *Test:* `MR-05`.
+
+**MR-06 Field rules name the exact violation (03 §2 M1–M6)**
+*Scenario:* 20 synthetic manifests, each violating exactly one rule (missing fields, id/version/core/phase/error-class/requires/provides/name rules, unknown field).
+*Pass criteria:* each produces its exact violation code at VALIDATE **and** the same named violation at ENABLE (`MANIFEST_INVALID`); the clean baseline passes. *Test:* `MR-06`.
+
+**MR-07 Lifecycle enable/disable (03 §3 ENABLE/DISABLE)**
+*Scenario:* Enable a module; enable again; disable; disable again; re-enable.
+*Pass criteria:* provides resolve only while enabled; `MODULE_ALREADY_ENABLED` (E-CONFLICT) and `MODULE_NOT_ENABLED` (E-ENV) are named refusals, never silent no-ops. *Test:* `MR-07`.
+
+**MR-08 Conflicts fail closed in both directions**
+*Scenario:* A module declaring `conflicts: [hotkeys]` while `hotkeys` is enabled; then the reverse after enabling it.
+*Pass criteria:* `conflict_enabled` violation in VALIDATE (detail names the enabled module); ENABLE refuses `CONFLICT_MODULE_ENABLED` (E-CONFLICT) with the specific rule named before any generic validation failure; once the conflict is disabled the same module validates clean. *Test:* `MR-08`.
+
+**MR-09 Capability resolution is mediated, never guessed (02 §3 rule 3)**
+*Scenario:* Resolve a provides of a registered-but-disabled module; enable it; resolve an unknown capability; two enabled providers; disable one.
+*Pass criteria:* `CAPABILITY_UNRESOLVED` (E-ENV) → `MR_OK` with the provider module → `CAPABILITY_UNRESOLVED` for unknown → `CAPABILITY_AMBIGUOUS` (E-CONFLICT, both ids listed) → resolves after one side disables; never a substitute. *Test:* `MR-09`.
+
+**MR-10 INVOKE gate: declared phases and tools only (03 §3 L2, M3)**
+*Scenario:* canInvoke with/without a declared phase, an undeclared phase, an undeclared tool, 8 malformed input shapes, and after disable.
+*Pass criteria:* happy paths `MR_OK`; `PHASE_NOT_DECLARED` and `TOOL_UNDECLARED` (both E-CONFLICT); `INVALID_INVOCATION` (E-INPUT) for bad shapes; `MODULE_NOT_ENABLED` after disable; a not-yet-enabled module refuses before phase/tool checks. *Test:* `MR-10`.
+
+**MR-11 Unavailable tool dependency fails closed (03 §3 tool availability via Task 07)**
+*Scenario:* A manifest requiring `search providers`, validated through the pristine Tool Bus; contrast manifest requiring `files`.
+*Pass criteria:* `tool_unavailable` violation names the token; VALIDATE/ENABLE/INVOKE all refuse (`MANIFEST_INVALID`); never enabled; contrast passes. *Test:* `MR-11`.
+
+**MR-12 Configuration fails closed at construction**
+*Scenario:* `toolBus` without `check()`, non-array/blank `availableTools`, and the no-bus legacy path.
+*Pass criteria:* each throws `E_INPUT_INVALID_REGISTRY_CONFIG` (E-INPUT); default tool set applies without a bus; legacy path still refuses an unavailable declared tool. *Test:* `MR-12`.
+
+**MR-13 Deterministic results and byte-identical reports**
+*Scenario:* Build equal registries twice; validate, describe, and report repeatedly; report a dirty registry.
+*Pass criteria:* deep-equal results for equal state; report text/sha256 identical across rebuilds and fresh registries; sha256 of own bytes; no timestamps or uuid-like ids; dirty report states `| Valid | n |` and lists the violations. *Test:* `MR-13`.
+
+**MR-14 AC-19 — an incomplete manifest must not run**
+*Scenario:* Register `mut_manifest_incomplete.yaml` (hotkeys manifest minus `requires:` and `errors:`, asserted byte-different).
+*Pass criteria:* REGISTER accepts; VALIDATE rejects with `missing_requires` + `missing_errors`; ENABLE and INVOKE refuse `MANIFEST_INVALID` with those violations attached; module never enabled; its `provides` never resolve; `validateAll` fails closed. *Test:* `MR-14`.
+
+**MR-15 Mutation suite — all 4 remaining fail closed**
+*Scenario:* Apply each manifest mutation (each asserted byte-different from the pristine hotkeys manifest).
+*Pass criteria (all 4):*
+
+| # | Mutation | Fixture | Required evidence |
+|---|---|---|---|
+| MR-15/1 | loop phase `SHIP` → `DEPLOY` | `mut_manifest_phase.yaml` | `invalid_phase` (detail `DEPLOY`); enable + invoke refused |
+| MR-15/2 | `E-TOOL` → `E-CUSTOM` | `mut_manifest_error_class.yaml` | `invalid_error_class` (detail `E-CUSTOM`); enable refused |
+| MR-15/3 | `core: >=2.0 <3.0` | `mut_manifest_core_range.yaml` | `core_version_mismatch` naming the range and Core 3.0; enable refused |
+| MR-15/4 | `id` → registered `tool-bus` | `mut_manifest_id_collision.yaml` | `MODULE_DUPLICATE` at REGISTER; real module untouched, still valid |
+
+*Tests:* `MR-15/1` … `MR-15/4`.
+
+**MR-16 Export surface, parser, error-class conformance**
+*Scenario:* Exercise every export (vocabularies, `parseManifest`, `validateManifest`, `checkTool`, report builder on an empty registry) and the code→class table.
+*Pass criteria:* the eight phases and thirteen fields match `01`/`03`; every `RESULT_CODES` class is inside the module's declared `errors` subset, itself inside the Core seven; parser names `manifest_unsupported_syntax`/`manifest_not_string`; standalone `validateManifest` detects conflicts in both directions; empty-registry report is valid and hash-stable. *Test:* `MR-16`.
+
+**Task 08 release gate:** `node --test` = 102/102 pass (19 suites, 0 skipped,
+exit 0); MR-01…MR-16 all covered by a named executable test; 5/5 manifest
+mutations fail closed with byte-different fixtures asserted; AC-19 enforced by
+code; reports byte-stable; Core `01`–`04` byte-unchanged; `12` byte-unchanged;
+source 18/18; Task 05/06/07's 83 tests still pass; **no commit or push** —
+implementation/review cycle per the Task 08 directive.
+
+**Known limitations (Group L):** no REPORT stage (the Report Bus is a
+separate, unimplemented L1 service); unresolved `consumes` has no normative
+VALIDATE gate (referred to the executive owner as a future-task question —
+see `16-module-registry.md` §10); `entry` existence is unchecked (no contract
+rule requires it); enablement state is per-instance; the manifest parser is a
+strict YAML subset that fails closed on anything else.
