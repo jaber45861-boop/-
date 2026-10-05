@@ -1,0 +1,25 @@
+{
+  "type": "completion",
+  "sections": [
+    {
+      "id": "summary",
+      "rows": [{ "name": "Status", "value": "REPORT_FAILED" }]
+    },
+    {
+      "id": "results",
+      "rows": [
+        {
+          "module": "planner",
+          "command": "planner.plan",
+          "status": "kinda-done",
+          "phase_ledger": ["PLAN: refused (corrupted)"],
+          "artifacts": [],
+          "evidence": []
+        }
+      ]
+    },
+    { "id": "phase-ledger", "rows": ["PLAN: refused (corrupted)"] },
+    { "id": "evidence", "rows": ["corrupted report input"] },
+    { "id": "remaining-issues", "rows": ["REPORT_FAILED: corrupted report input"] }
+  ]
+}

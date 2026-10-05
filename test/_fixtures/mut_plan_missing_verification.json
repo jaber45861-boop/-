@@ -1,0 +1,9 @@
+{
+  "task": "Add input validation to createUser",
+  "tier": "T1",
+  "changes": [
+    { "file": "src/api/users.ts", "why": "validate email and password in createUser()" }
+  ],
+  "risks": ["existing callers may rely on permissive input"],
+  "trigger": "intent-change"
+}

@@ -982,3 +982,133 @@ code-fixed in `OPERATION_KINDS`; construction duck-types the four injected
 contracts by public method name (deeper shape trust stays with each
 service's own fail-closed behavior); the orchestrator translates but never
 re-verifies upstream Tool Bus or Report Bus authority.
+
+## Group P — Planner Tests (added Task 11; contract: `19-planner.md`)
+
+Executable with `node --test` from the repo root. File:
+`test/planner.test.mjs` (30 tests, 5 suites); together with Groups A–O's
+167 the suite is **197 tests, 34 suites**. New L2 module:
+`modules/planner/` (`manifest.yaml` — `id: planner`, `phases: [PLAN]`,
+`provides: [planner:plan]`, `requires.tools: []`, `consumes:
+[report-bus:build]`, entry `modules/planner/index.mjs`; `src/errors.mjs`
+Core-class vocabulary, `src/request.mjs` strict request envelope with the
+INVALID_REQUEST / PLAN_INCOMPLETE split, `src/planner.mjs` the five-stage
+finite lifecycle). Groups A–O and the 167 prior tests are untouched and
+still pass; Core `01`–`04`, `12`, and the 18 source files are unchanged.
+This group makes the planning contract of `01` §3/§3.1/§3.2/§5 and `04` §2
+executable: every request either produces the tier-exact plan document
+answering the four questions — or is refused at VALIDATE with a named code,
+and never composes a plan.
+
+**PL-01 Entry point, manifest, configuration, result-code table (03 §2, 01 §13.5)**
+*Scenario:* Import `modules/planner/index.mjs`; scan its import specifiers; register all six real manifests in a registry wired to the real Tool Bus; `validateAll()`; compare vocabularies; construct planners with missing/non-conforming Report Buses; walk `RESULT_CODES`/`LIFECYCLE_STAGES`/tier/question/depth/trigger/ledger vocabularies.
+*Pass criteria:* every documented export exists; the entry imports only `./` files; all six manifests validate clean; planner `descriptor` = phases `[PLAN]`, `requires {tools: []}`, `provides [planner:plan]`, `consumes [report-bus:build]`, entry exact, declared errors = the four raisable classes ⊆ Core seven; every bad dependency throws `E_INPUT_INVALID_PLANNER_CONFIG`; exactly 4 result codes (one success, one `classified`) and the five lifecycle stages; tiers `[T0,T1,T2]`, questions `[files,order,verification,risks]`, depths `one-line/bullets/document`, three triggers, and the exact `01` §3.2 T0 ledger line. *Test:* `PL-01`.
+
+**PL-02 A T0 task ships a one-sentence intent and no plan document (AC-10 A)**
+*Scenario:* Run the T0 request ("Fix the typo in the README heading.").
+*Pass criteria:* `ok:true`, `code: COMPLETED`, `stage: COMPLETE`; plan exactly `{tier T0, depth one-line, one change, verification [], risks [], review {required:false, trigger:null}}`; report ledger `PLAN: skipped (T0 — one-line intent)` verbatim; summary `| Tier | T0 |`, `| Depth | one-line |`, `| Status | COMPLETED |`; remaining issues declared empty; `sha256 == sha256(text)`. *Test:* `PL-02`.
+
+**PL-03 A T1 task gets bullets answering all four questions (01 §5.1)**
+*Scenario:* Run a T1 request with changes, verification, and risks.
+*Pass criteria:* `depth: bullets`; changes/verification/risks echoed exactly; review `{required:false, trigger:null}`; ledger `PLAN: done (T1 — bullets)`; summary `| Depth | bullets |`. *Test:* `PL-03`.
+
+**PL-04 A T2 task gets a written document with a risk list (AC-10 B)**
+*Scenario:* Run the pristine T2 request; inspect plan and report.
+*Pass criteria:* `depth: document`; change order exactly `[src/api/users.ts, test/users.test.mjs]`; verification length 2; risks ≥ 1 (AC-10); ledger `PLAN: done (T2 — document)`; evidence carries `review=required:intent-change`; `sha256 == sha256(text)`. *Test:* `PL-04`.
+
+**PL-05 The §5.2 review gate is exact — trigger ⇒ required, none ⇒ no gate**
+*Scenario:* Run the pristine T2 request once per trigger type, then without `trigger`.
+*Pass criteria:* each trigger yields `review {required:true, trigger}` and evidence `review=required:<trigger>`; the triggerless run yields `{required:false, trigger:null}` and evidence `review=none` — no approval gate is invented. *Test:* `PL-05`.
+
+**PL-06 The order question is the request's order — never re-sorted**
+*Scenario:* A T1 request whose changes are deliberately unsorted (`zeta.mjs` before `alpha.mjs`).
+*Pass criteria:* plan changes preserve exactly `[zeta.mjs, alpha.mjs]` — array order IS the order (01 §5.1 question 2). *Test:* `PL-06`.
+
+**PL-07 Invalid envelopes fail closed at VALIDATE, before any plan exists**
+*Scenario:* Twenty invalid requests (null, string, array, number, `{}`, envelope field `generated_at`, empty/multi-line/pipe tasks, numeric tier, non-array/malformed changes entries, bad paths with space and `..`, bad verification/risks types, empty strings, unknown trigger) through a reporting spy.
+*Pass criteria:* each → `INVALID_REQUEST` / `REFUSED` / stage `VALIDATE`, E-INPUT, `plan: null`, report present, `validatePlanRequest` refuses the same input; exactly one report build per attempt (no hidden retries). *Test:* `PL-07`.
+
+**PL-08 An unknown tier fails closed**
+*Scenario:* `tier: "T3"`.
+*Pass criteria:* `INVALID_REQUEST` at VALIDATE, detail `tier must be one of: T0, T1, T2`, `plan: null`, reported. *Test:* `PL-08`.
+
+**PL-09 A T0 request carrying a plan document fails closed (over-planning)**
+*Scenario:* The pristine T2 request re-tiered to `T0` (verification/risks/trigger kept).
+*Pass criteria:* `PLAN_INCOMPLETE` / `REFUSED` at VALIDATE, E-VALID, detail names the one-sentence rule (01 §5.4), `plan: null`, report `| Code | PLAN_INCOMPLETE |`. *Test:* `PL-09`.
+
+**PL-10 A T0 request planning more than one file fails closed (01 §3.1)**
+*Scenario:* T0 with two changes and no document fields.
+*Pass criteria:* `PLAN_INCOMPLETE`, detail `exactly one file`, `plan: null`. *Test:* `PL-10`.
+
+**PL-11 A T1 plan missing a required question fails closed**
+*Scenario:* T1 without `verification`; T1 without `risks`.
+*Pass criteria:* both → `PLAN_INCOMPLETE` at VALIDATE with details naming question 3 and question 4; `plan: null`, reports present. *Test:* `PL-11`.
+
+**PL-12 A T2 plan missing a required question fails closed (AC-10)**
+*Scenario:* T2 without `risks`; T2 without `verification`; T2 with `risks: []`.
+*Pass criteria:* each → `PLAN_INCOMPLETE` naming question 4 / question 3 / question 4 — an empty list answers nothing. *Test:* `PL-12`.
+
+**PL-13 An approval trigger outside T2 fails closed (01 §5.2)**
+*Scenario:* T0 with `trigger: "migration"`; T1 with `trigger: "architecture"`.
+*Pass criteria:* both → `PLAN_INCOMPLETE`, detail `trigger requires tier T2`, `plan: null`. *Test:* `PL-13`.
+
+**PL-14 A report failure propagates and never claims completion**
+*Scenario:* A Report Bus whose `build` refuses (`DEPENDENCY_ERROR`); then the same bus with an earlier refusal.
+*Pass criteria:* attempted plan → `REPORT_FAILED` / `stage: REPORT` / `report: null` (E-ENV from the bus), detail preserves `attempt COMPLETED`, composed plan attached; the early-refusal run also reports `REPORT_FAILED` — REPORT is terminal. *Test:* `PL-14`.
+
+**PL-15 Planner → Report Bus — a real completion input, built by the real bus**
+*Scenario:* Wrap `build` to capture inputs for a success and a refusal, then rebuild the captured input independently.
+*Pass criteria:* `type: completion`, sections exactly `summary, results, phase-ledger, evidence, remaining-issues`; results row module `planner`, command `planner.plan`, status `success` (refusal: `failed` with one remaining issue); summary `Code/Phase` rows exact; the captured input is contract-valid on its own; final `sha256 == sha256(text)`. *Test:* `PL-15`.
+
+**PL-16 The manifest honors the Module Registry contract (PLAN-only gate)**
+*Scenario:* Register all six manifests, `validateAll()`, enable `planner`, resolve its capability, invoke at PLAN and at RUN.
+*Pass criteria:* validation green; `resolveCapability(planner:plan) → planner`; `canInvoke(planner, {phase: PLAN, tools: []}) → MR_OK`; `phase: RUN` refuses `PHASE_NOT_DECLARED` (E-CONFLICT, detail `RUN not in [PLAN]`) — the planner cannot execute outside its declared phase. *Test:* `PL-16`.
+
+**PL-17 The public surface is exactly plan(); sources honor the boundary**
+*Scenario:* Assert the frozen surface; scan every planner source file for import specifiers and executor APIs; count report builds across one success and three refusals.
+*Pass criteria:* surface exactly `plan`, object frozen; all imports `./`-only; no `child_process`/`eval`/`Function`/`require`/dynamic `import`, no handler/file access, no lateral `modules/` paths; exactly one `build` per attempt (4 attempts → 4 builds). *Test:* `PL-17`.
+
+**PL-18 No fabricated completion — only a COMPLETED result reads as success**
+*Scenario:* One success, four refusal shapes, one broken report bus; inspect every report.
+*Pass criteria:* only the success report contains `| Status | COMPLETED |`; every refusal report contains `| Status | REFUSED |` and `plan: null`; the failed report emits nothing at all (`report: null`, `ok:false`). *Test:* `PL-18`.
+
+**PL-19 Determinism: identical requests against identical state produce identical results**
+*Scenario:* Build fresh planners twice over a success and a refusal; scan report bytes and planner sources.
+*Pass criteria:* `deepStrictEqual(result1, result2)`; byte-identical report text and identical `sha256` (equal to `sha256(text)`); no timestamps, uuids, or machine paths in any report; no `Date.now`/`Math.random`/`process.pid`/`process.env` in any source. *Test:* `PL-19`.
+
+**PL-20 The report always mirrors the result — code, status, stage, issue**
+*Scenario:* Six attempts (success + five refusal shapes); compare each report's summary rows and remaining issue against the returned result.
+*Pass criteria:* `| Code |`, `| Status |`, `| Stage |` always equal the result's own values; every refusal's remaining issues carry exactly `CODE: detail`; success declares none. *Test:* `PL-20`.
+
+**Mutations PL-M1…PL-M10 (byte-different fixtures)**
+Each fixture is asserted byte-different from the pristine `plan_request.json` before use (M10 additionally content-different from the pristine report input captured on a control run), then must fail closed with its exact code, status, stage, manifest-class error, `plan: null` (VALIDATE-stage), a present hash-valid report (M10: `report === null`), the validator itself refusing it, and no mutation may ever read as completion:
+
+| Fixture | Exact mutation | Expected failure |
+|---|---|---|
+| `mut_plan_unknown_tier.json` | `tier: "T3"` | `INVALID_REQUEST` (E-INPUT, REFUSED @ VALIDATE) |
+| `mut_plan_extra_field.json` | envelope field `generated_at: "2026-10-05T12:00:00Z"` added | `INVALID_REQUEST` (E-INPUT, REFUSED @ VALIDATE) |
+| `mut_plan_t0_overplan.json` | full document (verification, risks, trigger, 2 changes) at `tier: "T0"` | `PLAN_INCOMPLETE` (E-VALID, REFUSED @ VALIDATE) |
+| `mut_plan_missing_risks.json` | `risks` removed (T2) | `PLAN_INCOMPLETE` (question 4) |
+| `mut_plan_missing_verification.json` | `verification` removed (T1) | `PLAN_INCOMPLETE` (question 3) |
+| `mut_plan_trigger_t1.json` | `trigger: "migration"` kept at `tier: "T1"` | `PLAN_INCOMPLETE` (trigger requires T2) |
+| `mut_plan_bad_path.json` | `file: "src/api/users file.ts"` (space) | `INVALID_REQUEST` (relative path rule) |
+| `mut_plan_empty_changes.json` | `changes: []` | `PLAN_INCOMPLETE` (question 1) |
+| `mut_plan_multiline_task.json` | newline inside `task` | `INVALID_REQUEST` (single-line rule) |
+| `mut_plan_report_input.json` | corrupted completion input (`status: "kinda-done"`, missing row fields) fed through the real Report Bus | `REPORT_FAILED` (`report === null`, attempt `COMPLETED` preserved) |
+
+**Task 11 release gate:** `node --test` = 197/197 pass (34 suites, 0
+skipped, exit 0); PL-01…PL-20 and PL-M1…M10 all covered by named
+executable tests; 10/10 mutations fail closed with byte-different fixtures
+asserted; two identical builds produce byte-identical reports and equal
+sha256; Core `01`–`04` byte-unchanged; `12` byte-unchanged; source 18/18;
+Task 05–10's 167 tests still pass; **no commit or push** —
+implementation/review cycle per the Task 11 directive.
+
+**Known limitations (Group P):** the tier is asserted by the caller, not
+computed (G5 classification is the Decision Rules' contract); `01` §5.3
+"real files" is format-level only — the module touches no file system; the
+planner is stateless (`01` §5.5 plan updates belong to a session runner);
+§5.2's "shown to the user" is a computed `review.required` flag with no UI
+to display it; the plan is not wired into the Agent Orchestrator (lateral
+imports are forbidden — composition is a future task); one report type and
+one capability exist, and `plan()` is synchronous.

@@ -1,0 +1,8 @@
+{
+  "task": "Add input validation to createUser",
+  "tier": "T2",
+  "changes": [],
+  "verification": ["node --test"],
+  "risks": ["existing callers may rely on permissive input"],
+  "trigger": "intent-change"
+}
