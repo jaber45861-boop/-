@@ -703,3 +703,130 @@ VALIDATE gate (referred to the executive owner as a future-task question —
 see `16-module-registry.md` §10); `entry` existence is unchecked (no contract
 rule requires it); enablement state is per-instance; the manifest parser is a
 strict YAML subset that fails closed on anything else.
+
+---
+
+## Group N — Report Bus Tests (added Task 09; contract: `17-report-bus.md`)
+
+Executable with `node --test` from the repo root. File:
+`test/rb-report-bus.test.mjs` (29 tests, 5 suites); together with Groups
+A–L's 102 the suite is **131 tests, 24 suites**. New module:
+`modules/report-bus/` (L1: `manifest.yaml`, `src/catalog.mjs` static
+report-type/section catalogue + fail-closed input validation,
+`src/bus.mjs` `createReportBus` with `validate`/`build`/describe surfaces and
+deterministic renderer, `src/errors.mjs`, `index.mjs` entry). Groups A–L and
+the 102 prior tests are untouched and still pass; Core `01`–`04`, `12`, and
+the 18 source files are unchanged. This group makes the REPORT stage of
+`03` §3 and the structured-result schema of `03` §5 executable.
+
+**RB-01 Entry point (03 §2 entry field)**
+*Scenario:* Import `modules/report-bus/index.mjs` dynamically; exercise the frozen bus surface; scan the entry file's import specifiers.
+*Pass criteria:* every documented export exists; `createReportBus()` returns a frozen object exposing `build`/`validate`/`listTypes`/`describeType`/`listSections`/`describeSection`; the entry imports only `node:` and `./` specifiers. *Test:* `RB-01`.
+
+**RB-02 Manifest under the established module contract (03 §2)**
+*Scenario:* Register all four real manifests in a Task 08 registry wired to the real Tool Bus; validate `report-bus`; compare vocabularies.
+*Pass criteria:* `report-bus` validates clean alone and with the other three; `phases` `[RUN, TEST, SHIP] ⊆` the eight; `requires.tools` `[]`, `consumes` `[]`, `conflicts` `[]`, entry exact; declared `errors` = the raisable subset = four classes, each inside the Core seven; the six failure codes of `RESULT_CODES` map inside both; the local eight-phase copy deep-equals the registry's copy. *Test:* `RB-02`.
+
+**RB-03 Valid input → successful report (03 §5)**
+*Scenario:* Build the pristine completion input and a single-row `result` input; call `validate` on the same input.
+*Pass criteria:* `ok:true`, code `VALID`, `error:null`, zero violations, `{text, sha256}` present with the type-specific title; `validate()` returns the same verdict and never carries a `report` key. *Test:* `RB-03`.
+
+**RB-04 Deterministic section identities (02 §1, 03 §5)**
+*Scenario:* Inspect the catalogue and type definitions; build the pristine input twice; extract rendered headings and row contracts.
+*Pass criteria:* exactly 7 sections in canonical order and 2 types; `completion` requires `results`/`phase-ledger`/`evidence`/`remaining-issues` and allows all seven; `result` requires and allows `results` only; repeat builds deep-equal; headings numbered in canonical order; the `results` field list equals the eight `03` §5 fields. *Test:* `RB-04`.
+
+**RB-05 Ordering is deterministic (03 §5, determinism)**
+*Scenario:* Build the byte-different control fixture (`mut_rb_reordered.json`, sections reversed) and a third inline permutation against the pristine build.
+*Pass criteria:* byte-identical text and sha256 across all permutations; headings stay canonical; row order inside a section is preserved exactly as supplied. *Test:* `RB-05`.
+
+**RB-06 Byte-identical repeats**
+*Scenario:* Build the same input three times on one bus and on fresh instances (both types).
+*Pass criteria:* every `text` equals the first; no instance state leaks. *Test:* `RB-06`.
+
+**RB-07 Identical SHA-256**
+*Scenario:* Collect hashes across repeats, fresh instances, and a section permutation.
+*Pass criteria:* exactly one distinct hash for the one input state. *Test:* `RB-07`.
+
+**RB-08 SHA-256 over the exact bytes**
+*Scenario:* Recompute `sha256(report.text)` for both types; flip one byte and recompute.
+*Pass criteria:* recomputed digest equals `report.sha256`; the flipped text hashes differently (every byte is covered). *Test:* `RB-08`.
+
+**RB-09 Invalid input fails closed (01 §13.5)**
+*Scenario:* Ten invalid inputs: null, string, array, empty object, empty/typeless `type`, non-array `sections`, envelope field (`generated_at`), and the corrupted fixture.
+*Pass criteria:* each → `INVALID_INPUT` (E-INPUT), `report === null`, violations non-empty, frozen result; `validate()` refuses identically and never renders. *Test:* `RB-09`.
+
+**RB-10 Unknown identity fails closed**
+*Scenario:* Unknown report type (fixture), unknown section id, a known section disallowed for the type, and unknown describe lookups.
+*Pass criteria:* `UNKNOWN_REPORT_TYPE` with detail `status-report`; `INVALID_SECTION` naming the ghost id and the disallowed section; describe surfaces refuse by the same codes; `report === null` everywhere. *Test:* `RB-10`.
+
+**RB-11 Duplicate section identity fails closed**
+*Scenario:* The duplicate fixture (two `results` entries) and an inline duplicate.
+*Pass criteria:* `DUPLICATE_SECTION` (E-CONFLICT), detail `results`, `report === null` — duplicates are never merged or silently deduplicated. *Test:* `RB-11`.
+
+**RB-12 Missing required content fails closed**
+*Scenario:* Missing `results` section (fixture), row missing `command` (fixture), an empty section list, a required section with broken `rows`.
+*Pass criteria:* `MISSING_REQUIRED_FIELD` naming `section:results` and `results[0].command`; the empty list yields exactly four violations in catalogue order (`results`, `phase-ledger`, `evidence`, `remaining-issues`); broken `rows` → `INVALID_SECTION`; `validate()` ≡ `build()`. *Test:* `RB-12`.
+
+**RB-13 No volatile data (determinism)**
+*Scenario:* Scan built output for ISO timestamps, uuids, pids, machine paths, `undefined`/`NaN`, volatile field names; scan every module source file for `Date.now`/`Math.random`/`process.pid|env|hrtime`/`new Date`.
+*Pass criteria:* zero matches in output and source. *Test:* `RB-13`.
+
+**RB-14 Separate-process generation**
+*Scenario:* Spawn a fresh `node` process that imports the entry point, builds the pristine fixture, and prints `{text, sha256}`.
+*Pass criteria:* child exits 0; text and hash byte-identical to the in-process build. *Test:* `RB-14`.
+
+**RB-15 Module Registry rows (03 §3 REPORT-facing state)**
+*Scenario:* Register and enable the four real manifests on a registry, map `validateAll()` into §5 rows, pass `buildRegistryReport(registry).sha256` as an artifact row.
+*Pass criteria:* build succeeds; every module's validation row renders with its exact identity and `success`; the registry report hash appears in the artifacts table; `sha256(text)` covers the bytes; the bus never imported the registry. *Test:* `RB-15`.
+
+**RB-16 Tool Bus rows (02 §2 Report Bus evidence)**
+*Scenario:* Map `bus.list()` capability states of the real 11-capability declaration set into §5 rows (`AVAILABLE → success`, other states → `blocked` with the exact state as evidence/remaining issue).
+*Pass criteria:* build succeeds with mixed states present; the first capability renders exactly as supplied; unavailable capabilities appear as remaining issues; hash covers the bytes; no state is collapsed inside the row. *Test:* `RB-16`.
+
+**RB-17 Hotkey/runtime rows (03 H6, 14 §4)**
+*Scenario:* Execute real hotkeys (`R`, `PN`, `W`) and pass their results through as §5 rows untouched; add `buildRuntimeReport(...).sha256` as an artifact row; build a completion report over the flattened ledger/evidence/remaining issues.
+*Pass criteria:* both builds succeed; `success` (executed) and `blocked` (unimplemented) both render — never collapsed; the runtime report hash appears; the real `E_ENV_HANDLER_MISSING` remaining issue carries through verbatim. *Test:* `RB-17`.
+
+**RB-18 No L2 import or execution (02 §3 rules 1/3)**
+*Scenario:* Scan every Report Bus source file for import specifiers, lateral module paths, and executor APIs; build twice from fresh buses over the same input.
+*Pass criteria:* every specifier starts `node:` or `./`; `node:` set is exactly `{node:crypto}`; no `modules/(hotkeys|tool-bus|module-registry)` reference, no `child_process`/`eval`/`Function`/`require`/dynamic `import`; inputs are never mutated. *Test:* `RB-18`.
+
+**RB-19 Protected files byte-identical**
+*Scenario:* sha256 the five protected files against their pins.
+*Pass criteria:* 5/5 match (`01`–`04`, `12`). *Test:* `RB-19`.
+
+**RB-20 Prior suite stays green**
+*Scenario:* Spawn `node --test --test-reporter=tap` over the six prior suites from inside the test run (test-context marker stripped from the child env).
+*Pass criteria:* child exit 0, `# fail 0`, `# pass == # tests`, tests ≥ 102. *Test:* `RB-20`.
+
+**Mutations RB-M1…RB-M9 (byte-different fixtures)**
+Each fixture is asserted byte-different from the pristine `rb_report_input.json` before use, then must refuse with its exact code, its exact class, `report === null`, the expected violation detail, and an identical `validate()` verdict:
+
+| Fixture | Exact mutation | Expected refusal |
+|---|---|---|
+| `mut_rb_missing_section.json` | required `results` section removed | `MISSING_REQUIRED_FIELD` (E-VALID), detail `section:results` |
+| `mut_rb_duplicate_section.json` | `results` declared twice | `DUPLICATE_SECTION` (E-CONFLICT), detail `results` |
+| `mut_rb_malformed_section.json` | a raw string where a section entry belongs | `INVALID_SECTION` (E-VALID) |
+| `mut_rb_invalid_status.json` | `status: "kinda-done"` | `DEPENDENCY_ERROR` (E-ENV), detail `results[0].status` |
+| `mut_rb_unknown_type.json` | `type: "status-report"` | `UNKNOWN_REPORT_TYPE` (E-INPUT) |
+| `mut_rb_corrupted.json` | `sections` replaced by an object | `INVALID_INPUT` (E-INPUT) |
+| `mut_rb_missing_field.json` | row missing `command` | `MISSING_REQUIRED_FIELD` (E-VALID), detail `results[0].command` |
+| `mut_rb_invalid_row.json` | row `42` instead of an object | `DEPENDENCY_ERROR` (E-ENV), detail `results[0]` |
+| `mut_rb_nondeterministic.json` | undeclared volatile field `generated_at` in a row | `INVALID_SECTION` (E-VALID) |
+| `mut_rb_reordered.json` | sections reversed (control) | `VALID` — byte-identical report (RB-05) |
+
+**Task 09 release gate:** `node --test` = 131/131 pass (24 suites, 0 skipped,
+exit 0); RB-01…RB-20 and RB-M1…M9 all covered by named executable tests;
+9/9 mutations fail closed with byte-different fixtures asserted; reports
+byte-stable across calls, instances, permutations, and processes
+(`sha256(text) === sha256`); Core `01`–`04` byte-unchanged; `12`
+byte-unchanged; source 18/18; Task 05–08's 102 tests still pass; **no commit
+or push** — implementation/review cycle per the Task 09 directive.
+
+**Known limitations (Group N):** the bus cannot verify that a supplied
+`success` passed D1–D10 (`03` §5 O1/O2 are the emitter's duty); required
+sections are enforced by presence, not by a minimum row count; artifact
+`sha256` values are format-checked but not recomputed (the bytes are never
+fetched — the no-`fs` boundary holds); only the two spec-defined report
+types exist (`completion`, `result`); the bus persists and transports
+nothing; row order is semantic while section order is canonical.

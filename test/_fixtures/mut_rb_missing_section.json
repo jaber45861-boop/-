@@ -1,0 +1,28 @@
+{
+  "type": "completion",
+  "sections": [
+    {
+      "id": "summary",
+      "rows": [
+        { "name": "Modules registered", "value": 4 },
+        { "name": "Validation", "value": "clean" }
+      ]
+    },
+    {
+      "id": "phase-ledger",
+      "rows": ["PLAN: done (T1)", "TEST: done (node --test)", "DEBUG: skipped (no failures)"]
+    },
+    {
+      "id": "artifacts",
+      "rows": [
+        { "id": "module-registry-report", "sha256": "c861b562caddc05d0df984797518496916def72114a8c36b4c83e8c3dd710139" }
+      ]
+    },
+    {
+      "id": "evidence",
+      "rows": ["`node --test` → 102 passed", "`sha256sum -c` → 5/5 OK"]
+    },
+    { "id": "remaining-issues", "rows": [] },
+    { "id": "assumptions", "rows": [] }
+  ]
+}

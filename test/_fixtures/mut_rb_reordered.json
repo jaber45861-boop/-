@@ -1,0 +1,53 @@
+{
+  "type": "completion",
+  "sections": [
+    { "id": "assumptions", "rows": [] },
+    { "id": "remaining-issues", "rows": [] },
+    {
+      "id": "evidence",
+      "rows": ["`node --test` → 102 passed", "`sha256sum -c` → 5/5 OK"]
+    },
+    {
+      "id": "artifacts",
+      "rows": [
+        { "id": "module-registry-report", "sha256": "c861b562caddc05d0df984797518496916def72114a8c36b4c83e8c3dd710139" }
+      ]
+    },
+    {
+      "id": "phase-ledger",
+      "rows": ["PLAN: done (T1)", "TEST: done (node --test)", "DEBUG: skipped (no failures)"]
+    },
+    {
+      "id": "results",
+      "rows": [
+        {
+          "module": "hotkeys",
+          "command": "grimoire.key.R",
+          "status": "success",
+          "phase_ledger": ["RUN: done (T1)", "TEST: done (node --test)"],
+          "artifacts": ["hotkey-runtime-result:grimoire.key.R"],
+          "evidence": ["executeHotkey(R) → OK_EXECUTED"],
+          "remaining_issues": [],
+          "assumptions": []
+        },
+        {
+          "module": "tool-bus",
+          "command": "toolbus.check",
+          "status": "blocked",
+          "phase_ledger": ["RUN: blocked (E-TOOL)"],
+          "artifacts": [],
+          "evidence": ["check(search) → TOOL_UNAVAILABLE"],
+          "remaining_issues": ["capability search is UNAVAILABLE"],
+          "assumptions": []
+        }
+      ]
+    },
+    {
+      "id": "summary",
+      "rows": [
+        { "name": "Modules registered", "value": 4 },
+        { "name": "Validation", "value": "clean" }
+      ]
+    }
+  ]
+}

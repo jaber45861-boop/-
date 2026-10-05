@@ -1,0 +1,27 @@
+# Grimoire v3 — Report Bus (L1 Core Service) module manifest
+# Schema: docs/v3/03-extension-contract.md §2 (field set is normative; no fields beyond it).
+id: "report-bus"
+version: "1.0.0"
+core: ">=3.0 <4.0"
+name: "Report Bus"
+purpose: "Validate caller-supplied structured report data against the fixed report-type and section catalogue (03 §5 structured results, 01 §12 Completion Report), fail closed on any contract violation, and render sectioned reports as byte-stable text with a SHA-256 of the exact emitted bytes — reporting only: no execution, no tool invocation, no module discovery, no adapter or hotkey activation."
+phases:
+  - RUN
+  - TEST
+  - SHIP
+requires:
+  tools: []
+provides:
+  - "report-bus:build"
+  - "report-bus:validate"
+consumes: []
+conflicts: []
+outputs:
+  - "report-bus-report"
+  - "completion-report"
+errors:
+  - E-INPUT
+  - E-ENV
+  - E-CONFLICT
+  - E-VALID
+entry: "modules/report-bus/index.mjs"

@@ -1,0 +1,15 @@
+{
+  "type": "completion",
+  "sections": [
+    "results",
+    {
+      "id": "phase-ledger",
+      "rows": ["PLAN: done (T1)"]
+    },
+    {
+      "id": "evidence",
+      "rows": ["`node --test` → 102 passed"]
+    },
+    { "id": "remaining-issues", "rows": [] }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "type": "completion",
+  "sections": [
+    {
+      "id": "results",
+      "rows": [
+        {
+          "module": "hotkeys",
+          "status": "success",
+          "phase_ledger": ["RUN: done (T1)"],
+          "artifacts": [],
+          "evidence": ["executeHotkey(R) → OK_EXECUTED"],
+          "remaining_issues": [],
+          "assumptions": []
+        }
+      ]
+    },
+    {
+      "id": "phase-ledger",
+      "rows": ["PLAN: done (T1)"]
+    },
+    {
+      "id": "evidence",
+      "rows": ["`node --test` → 102 passed"]
+    },
+    { "id": "remaining-issues", "rows": [] }
+  ]
+}

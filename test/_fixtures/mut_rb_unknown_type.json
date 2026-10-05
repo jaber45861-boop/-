@@ -1,0 +1,9 @@
+{
+  "type": "status-report",
+  "sections": [
+    {
+      "id": "summary",
+      "rows": [{ "name": "Anything", "value": "goes" }]
+    }
+  ]
+}

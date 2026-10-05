@@ -1,0 +1,44 @@
+{
+  "type": "completion",
+  "sections": [
+    {
+      "id": "results",
+      "rows": [
+        {
+          "module": "hotkeys",
+          "command": "grimoire.key.R",
+          "status": "success",
+          "phase_ledger": ["RUN: done (T1)"],
+          "artifacts": ["hotkey-runtime-result:grimoire.key.R"],
+          "evidence": ["executeHotkey(R) → OK_EXECUTED"],
+          "remaining_issues": [],
+          "assumptions": []
+        }
+      ]
+    },
+    {
+      "id": "results",
+      "rows": [
+        {
+          "module": "tool-bus",
+          "command": "toolbus.check",
+          "status": "blocked",
+          "phase_ledger": ["RUN: blocked (E-TOOL)"],
+          "artifacts": [],
+          "evidence": ["check(search) → TOOL_UNAVAILABLE"],
+          "remaining_issues": ["capability search is UNAVAILABLE"],
+          "assumptions": []
+        }
+      ]
+    },
+    {
+      "id": "phase-ledger",
+      "rows": ["PLAN: done (T1)", "TEST: done (node --test)"]
+    },
+    {
+      "id": "evidence",
+      "rows": ["`node --test` → 102 passed"]
+    },
+    { "id": "remaining-issues", "rows": [] }
+  ]
+}
