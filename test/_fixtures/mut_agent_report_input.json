@@ -1,0 +1,25 @@
+{
+  "type": "completion",
+  "sections": [
+    {
+      "id": "summary",
+      "rows": [{ "name": "Status", "value": "REPORT_FAILED" }]
+    },
+    {
+      "id": "results",
+      "rows": [
+        {
+          "module": "hotkeys",
+          "command": "agent.orchestrate",
+          "status": "kinda-done",
+          "phase_ledger": ["EXECUTE: refused (corrupted)"],
+          "artifacts": [],
+          "evidence": []
+        }
+      ]
+    },
+    { "id": "phase-ledger", "rows": ["EXECUTE: refused (corrupted)"] },
+    { "id": "evidence", "rows": ["corrupted report input"] },
+    { "id": "remaining-issues", "rows": ["REPORT_FAILED: corrupted report input"] }
+  ]
+}

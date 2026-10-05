@@ -1,0 +1,6 @@
+{
+  "kind": "hotkey",
+  "module": "hotkeys",
+  "phase": "RUN",
+  "target": { "key": "R" }
+}

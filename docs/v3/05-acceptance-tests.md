@@ -830,3 +830,155 @@ sections are enforced by presence, not by a minimum row count; artifact
 fetched — the no-`fs` boundary holds); only the two spec-defined report
 types exist (`completion`, `result`); the bus persists and transports
 nothing; row order is semantic while section order is canonical.
+
+## Group O — Agent Orchestrator Tests (added Task 10; contract: `18-agent-orchestrator.md`)
+
+Executable with `node --test` from the repo root. File:
+`test/agent-orchestrator.test.mjs` (36 tests, 5 suites); together with Groups
+A–N's 131 the suite is **167 tests, 29 suites**. New L2 module:
+`modules/agent/` (`manifest.yaml` — `id: agent`, `provides:
+[agent:orchestrate]`, `requires.tools: []`, entry `modules/agent/index.mjs`;
+`src/errors.mjs` Core-class vocabulary, `src/request.mjs` strict request
+envelope, `src/orchestrator.mjs` the seven-stage finite lifecycle). Groups
+A–N and the 131 prior tests are untouched and still pass; Core `01`–`04`,
+`12`, and the 18 source files are unchanged. This group makes the
+orchestration contract of directive Task 10 executable: every request
+either reaches the Hotkey Runtime through the Module Registry and Tool Bus
+and gets a Report Bus completion — or is refused at a named stage with a
+named code, and never executes.
+
+**AO-01 Entry point, manifest, configuration, result-code table (03 §2, 01 §13.5)**
+*Scenario:* Import `modules/agent/index.mjs`; scan its import specifiers; register all five real manifests in a registry wired to the real Tool Bus; `validateAll()`; compare vocabularies; construct orchestrators with each dependency removed; walk `RESULT_CODES`/`LIFECYCLE_STAGES`/`OPERATION_KINDS`.
+*Pass criteria:* every documented export exists; the entry imports only `./` files; all five manifests validate clean; `descriptor` = phases `[RUN, TEST, SHIP]`, `requires {tools: []}`, `provides [agent:orchestrate]`, the four `consumes`, entry exact, declared errors = the six raisable classes ⊆ Core seven; local eight-phase copy ≡ registry copy; every missing dependency throws `E_INPUT_INVALID_ORCHESTRATOR_CONFIG`; exactly 12 result codes (one success, three `classified`) and the seven lifecycle stages in directive order; the only kind is `hotkey` with capability `hotkeys:execute`. *Test:* `AO-01`.
+
+**AO-02 A valid request resolves into an exact execution plan**
+*Scenario:* Run the pristine request; inspect plan and report evidence; re-run with `phase: "DEBUG"` (a real but undeclared phase).
+*Pass criteria:* `ok:true`, `code: COMPLETED`; plan exactly `{module: hotkeys, capability: hotkeys:execute, phase: RUN, tools: [files]}`; report evidence shows each registry gate (`has → true`, `isEnabled → true`, `provides.includes → true`, `resolveCapability → hotkeys`, `canInvoke → MR_OK`); the wrong phase stops at RESOLVE with `PHASE_NOT_DECLARED`, `plan: null`, and a report (refusals are reported too). *Test:* `AO-02`.
+
+**AO-03 An enabled module resolves (enablement observed, never assumed)**
+*Scenario:* Run with hotkeys enabled; then against a registry where hotkeys is registered but not enabled.
+*Pass criteria:* enabled run completes and reports `PREFLIGHT: done (1 tool)`; disabled run → `MODULE_DISABLED` at RESOLVE with `plan: null`. *Test:* `AO-03`.
+
+**AO-04 An available capability resolves; two providers are never guessed**
+*Scenario:* Normal run; then a spoof module whose manifest id differs but declares the same `hotkeys:execute`, both enabled.
+*Pass criteria:* normal run shows `resolveCapability(hotkeys:execute) → hotkeys`; the two-provider registry yields `CAPABILITY_AMBIGUOUS` (E-CONFLICT) naming the other provider, `plan: null` — never a guessed side. *Test:* `AO-04`.
+
+**AO-05 A valid tool dependency reaches execution through Tool Bus preflight**
+*Scenario:* Wrap the Tool Bus in a counting spy; run the pristine request.
+*Pass criteria:* exactly one `check` (the manifest's single declared tool `files`); `preflight = {ok:true, tools:[{tool: files, ok:true, code: TB_OK}]}`; `execution.executed === true`; report evidence `toolBus.check(files) → TB_OK`. *Test:* `AO-05`.
+
+**AO-06 Successful execution reaches REPORT and COMPLETE**
+*Scenario:* Run the pristine request end to end; inspect result and report bytes.
+*Pass criteria:* `status: COMPLETED`, `stage: COMPLETE`, `error: null`, report present with `sha256 == sha256(text)`; title `# Grimoire v3 — Completion Report`; summary `| Status | COMPLETED |`; results row `| hotkeys | agent.orchestrate | success |`; evidence `runtime.executeHotkey(...) → OK_EXECUTED (executed=true)`; ledger ends `REPORT: done (report-bus)` + `COMPLETE: done`; remaining issues declared empty. *Test:* `AO-06`.
+
+**AO-07 Invalid requests fail closed at VALIDATE, before anything runs**
+*Scenario:* Fifteen invalid envelopes (null, string, array, number, `{}`, envelope field `generated_at`, wrong kind, numeric module, newline module, unknown phase, both target fields, empty target, non-object target, extra target field, non-object args) against a runtime spy; cross-check `validateRequest`.
+*Pass criteria:* each → `INVALID_REQUEST` / `REFUSED` / stage `VALIDATE`, `plan`/`preflight`/`execution` all `null`, E-INPUT, report present, `validateRequest` refuses the same input; zero runtime calls. *Test:* `AO-07`.
+
+**AO-08 An unknown module fails closed**
+*Scenario:* Run with `module: "ghost-module"`.
+*Pass criteria:* `MODULE_NOT_FOUND` at RESOLVE, E-INPUT, detail `ghost-module`, `plan: null`, report contains `registry.has(ghost-module) → false`, zero runtime calls. *Test:* `AO-08`.
+
+**AO-09 A disabled module fails closed**
+*Scenario:* Request `tool-bus`/`toolbus:capabilities` on a registry where only hotkeys is enabled.
+*Pass criteria:* `MODULE_DISABLED` at RESOLVE, E-ENV, `plan: null`, report shows `registry.isEnabled(tool-bus) → false`, zero runtime calls. *Test:* `AO-09`.
+
+**AO-10 Unknown, unpairable, and ambiguous capabilities fail closed**
+*Scenario:* (a) capability the named module does not provide; (b) a real capability of another enabled module but not the one a hotkey operation executes; (c) two enabled providers of the same capability.
+*Pass criteria:* (a) → `CAPABILITY_UNAVAILABLE` with `hotkeys does not provide ghost:capability`; (b) → `CAPABILITY_UNAVAILABLE` with `operation hotkey executes hotkeys:execute only`; (c) → `CAPABILITY_AMBIGUOUS` (E-CONFLICT); all three `ok:false`, `plan: null`, reported, zero runtime calls. *Test:* `AO-10`.
+
+**AO-11 An unavailable tool fails closed**
+*Scenario:* Inject a bus whose `check` returns `TOOL_UNAVAILABLE` (registry still healthy).
+*Pass criteria:* `TOOL_REQUIRED` / `REFUSED` at PREFLIGHT, E-TOOL, detail `files: TOOL_UNAVAILABLE`, `preflight.ok:false`, `execution: null`, report evidence `toolBus.check(files) → TOOL_UNAVAILABLE`, zero runtime calls. *Test:* `AO-11`.
+
+**AO-12 A blocked tool fails closed**
+*Scenario:* Same with `TOOL_BLOCKED`.
+*Pass criteria:* identical shape to AO-11 with `files: TOOL_BLOCKED`. *Test:* `AO-12`.
+
+**AO-13 A missing dependency fails closed**
+*Scenario:* Same with `DEPENDENCY_MISSING`.
+*Pass criteria:* identical shape with `files: DEPENDENCY_MISSING` — the bus's code passes through verbatim, never reinterpreted. *Test:* `AO-13`.
+
+**AO-14 An invalid capability token fails closed at VALIDATE**
+*Scenario:* `capability: "not-a-capability"`.
+*Pass criteria:* `INVALID_REQUEST` at VALIDATE, detail names the `namespace:name` form, report present. *Test:* `AO-14`.
+
+**AO-15 A runtime refusal propagates as EXECUTION_REFUSED**
+*Scenario:* `target: {key: "GHOST"}` — the real runtime refuses an unknown key.
+*Pass criteria:* `EXECUTION_REFUSED` / `REFUSED` at EXECUTE; the runtime's E-INPUT class is propagated, not invented; detail carries `E_INPUT_UNKNOWN_KEY`; the raw execution result is attached with `executed:false`; report hash valid. *Test:* `AO-15`.
+
+**AO-16 A handler failure propagates as EXECUTION_FAILED**
+*Scenario:* A runtime whose handler throws inside `run`.
+*Pass criteria:* `EXECUTION_FAILED` / `FAILED` at EXECUTE; class `E-UNKNOWN` from the runtime's classification; detail carries `E_UNKNOWN_EXCEPTION` + the runtime's neutral message; `execution.executed === false`; report ledger `EXECUTE: failed (EXECUTION_FAILED)`. *Test:* `AO-16`.
+
+**AO-17 A report failure propagates and never claims completion**
+*Scenario:* A report bus whose `build` refuses (`DEPENDENCY_ERROR`); then the same bus with an earlier refusal.
+*Pass criteria:* executed run → `REPORT_FAILED` / `stage: REPORT` / `report: null` (an executed request is NOT a completed one), E-ENV from the bus, detail preserves `attempt COMPLETED`, `execution.executed === true`; the early-refusal run also reports `REPORT_FAILED` — REPORT is terminal. *Test:* `AO-17`.
+
+**AO-18 Agent → Module Registry uses only the public contract (with belts)**
+*Scenario:* Proxy the real registry and record every property touched during a run; then four fake registries refusing `canInvoke` in unexpected codes.
+*Pass criteria:* accessed properties ⊆ `{has, isEnabled, describe, resolveCapability, canInvoke}`; belts translate `MANIFEST_INVALID→MANIFEST_INVALID`, `TOOL_UNAVAILABLE→TOOL_REQUIRED`, `INVALID_INVOCATION→INVALID_REQUEST`, `MODULE_NOT_ENABLED→MODULE_DISABLED` — each at RESOLVE with `plan: null`, never swallowed, zero belt-refusal runtime calls. *Test:* `AO-18`.
+
+**AO-19 Agent → Hotkey Runtime — one call, exact input, none on refusal**
+*Scenario:* Spy the runtime for a plain run, an `args: {}` run, and three gate refusals.
+*Pass criteria:* exactly one call per executed run; input is exactly `{key: "R"}` (no transformation) and `{key: "R", args: {}}` when args present; zero calls for module/capability/invalid refusals. *Test:* `AO-19`.
+
+**AO-20 Agent → Tool Bus — one check per declared tool, zero when resolution fails**
+*Scenario:* Spy `check` for a normal run, a ghost-module run, an invalid run, and a faulted bus.
+*Pass criteria:* `checks === [files]` for the normal run; `[]` for resolution failure; `[]` for invalid requests; the faulted bus yields `TOOL_REQUIRED`/`ok:false` — never reinterpreted. *Test:* `AO-20`.
+
+**AO-21 Agent → Report Bus — a real completion input, built by the real bus**
+*Scenario:* Wrap `build` to capture the input, then rebuild the captured input independently.
+*Pass criteria:* input `type: completion`, sections exactly `summary, results, phase-ledger, evidence, remaining-issues`; results row module `hotkeys`, command `agent.orchestrate`, status `success`, assumptions `[]`; remaining-issues zero rows; the captured input is contract-valid on its own (`build → ok:true`); final `sha256 == sha256(text)`. *Test:* `AO-21`.
+
+**AO-22 Direct handler bypass is impossible through the public surface (02 §3 rules 1/3)**
+*Scenario:* Assert the frozen surface; scan every agent source file for import specifiers and executor APIs; run refused requests through a runtime spy; run an unknown key through.
+*Pass criteria:* surface is exactly `run`, object frozen; all imports `./`-only; no `child_process`/`eval`/`Function`/`require`/dynamic `import`, no handler/file access, no `modules/(hotkeys|tool-bus|module-registry|report-bus)` paths in agent sources; refused requests produce zero runtime calls; the unknown key still reaches the runtime exactly once (its gates decide — never around them). *Test:* `AO-22`.
+
+**AO-23 An undeclared capability cannot execute**
+*Scenario:* (a) capability the module does not hold; (b) a genuine capability of another enabled module; (c) a genuine but unpairable capability.
+*Pass criteria:* all three → `CAPABILITY_UNAVAILABLE`, `ok:false`, `execution: null`, reported; zero runtime calls. *Test:* `AO-23`.
+
+**AO-24 An unavailable tool cannot become success**
+*Scenario:* `TOOL_UNAVAILABLE` bus + pristine request; inspect the report.
+*Pass criteria:* `TOOL_REQUIRED` / `REFUSED`, `execution: null`, zero runtime calls; report row renders `| hotkeys | agent.orchestrate | blocked |` (E-TOOL → blocked), never `| Status | COMPLETED |`; remaining issue `TOOL_REQUIRED: files: TOOL_UNAVAILABLE`. *Test:* `AO-24`.
+
+**AO-25 A disabled module cannot execute**
+*Scenario:* Registry with zero enabled modules; run the pristine request; inspect the report.
+*Pass criteria:* `MODULE_DISABLED` / `REFUSED`, `plan: null`, `execution: null`, zero runtime calls; report shows `| Code | MODULE_DISABLED |` and `| Status | REFUSED |`, never `| Status | COMPLETED |`. *Test:* `AO-25`.
+
+**AO-26 Determinism: identical requests against identical state produce identical results**
+*Scenario:* Build the orchestrator twice over the same injected state; run a success and a refusal in pairs; scan report bytes.
+*Pass criteria:* `deepStrictEqual(result1, result2)`; byte-identical report text and identical `sha256` (which equals `sha256(text)`) for both success and refusal; no timestamps, uuids, or machine paths anywhere in any report. *Test:* `AO-26`.
+
+**Mutations AO-M1…AO-M10 (byte-different fixtures)**
+Each fixture is asserted byte-different from the pristine `agent_request.json` before use (M10 additionally content-different from the pristine report input captured on a control run), then must fail closed with its exact code, status, stage, and a Core-class error; every refusal still carries its hash-valid report (except M10, where `report === null`), and no mutation may ever read as completion:
+
+| Fixture | Exact mutation | Expected failure |
+|---|---|---|
+| `mut_agent_unknown_module.json` | `module: "ghost-module"` | `MODULE_NOT_FOUND` (E-INPUT, REFUSED @ RESOLVE) |
+| `mut_agent_disabled_module.json` | `module: "tool-bus"` — registered, not enabled | `MODULE_DISABLED` (E-ENV, REFUSED @ RESOLVE) |
+| `mut_agent_unknown_capability.json` | `capability: "ghost:capability"` | `CAPABILITY_UNAVAILABLE` (E-ENV, REFUSED @ RESOLVE) |
+| `mut_agent_missing_tool.json` | `phase: "TEST"` + bus faulted `TOOL_UNAVAILABLE` | `TOOL_REQUIRED` (E-TOOL, REFUSED @ PREFLIGHT) |
+| `mut_agent_blocked_tool.json` | `phase: "SHIP"` + bus faulted `TOOL_BLOCKED` | `TOOL_REQUIRED` (E-TOOL, REFUSED @ PREFLIGHT) |
+| `mut_agent_dependency.json` | `target.command` + bus faulted `DEPENDENCY_MISSING` | `TOOL_REQUIRED` (E-TOOL, REFUSED @ PREFLIGHT) |
+| `mut_agent_malformed.json` | `capability` field removed | `INVALID_REQUEST` (E-INPUT, REFUSED @ VALIDATE) |
+| `mut_agent_invalid_capability.json` | `capability: "not-a-capability"` | `INVALID_REQUEST` (E-INPUT, REFUSED @ VALIDATE) |
+| `mut_agent_execution_refusal.json` | `target.key: "GHOST"` (runtime refuses) | `EXECUTION_REFUSED` (E-INPUT, REFUSED @ EXECUTE, runtime called once) |
+| `mut_agent_report_input.json` | corrupted completion input (`status: "kinda-done"`, missing row fields) fed through the real Report Bus | `REPORT_FAILED` (`report === null`, attempt `COMPLETED` preserved) |
+
+**Task 10 release gate:** `node --test` = 167/167 pass (29 suites, 0 skipped,
+exit 0); AO-01…AO-26 and AO-M1…M10 all covered by named executable tests;
+10/10 mutations fail closed with byte-different fixtures asserted; two
+identical builds produce byte-identical reports and equal sha256; Core
+`01`–`04` byte-unchanged; `12` byte-unchanged; source 18/18; Task 05–09's
+131 tests still pass; **no commit or push** — implementation/review cycle
+per the Task 10 directive.
+
+**Known limitations (Group O):** one operation kind only (`hotkey` →
+`hotkeys:execute`); no planner, retry, loop, memory, or policy engine — a
+single deterministic synchronous pass; the kind↔capability pairing is
+code-fixed in `OPERATION_KINDS`; construction duck-types the four injected
+contracts by public method name (deeper shape trust stays with each
+service's own fail-closed behavior); the orchestrator translates but never
+re-verifies upstream Tool Bus or Report Bus authority.

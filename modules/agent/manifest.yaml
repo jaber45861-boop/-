@@ -1,0 +1,31 @@
+# Grimoire v3 — Agent Orchestrator (L2) module manifest
+# Schema: docs/v3/03-extension-contract.md §2 (field set is normative; no fields beyond it).
+id: "agent"
+version: "1.0.0"
+core: ">=3.0 <4.0"
+name: "Agent Orchestrator"
+purpose: "Receive a strict execution request, resolve it exclusively through the Module Registry's public contract, preflight declared tools through the Tool Bus, execute hotkey targets only through the Hotkey Runtime's gates, and emit every terminal attempt as a Report Bus completion report — fail closed at each lifecycle stage with no fallback, no retry, no capability fabrication, and no direct handler or provider invocation."
+phases:
+  - RUN
+  - TEST
+  - SHIP
+requires:
+  tools: []
+provides:
+  - "agent:orchestrate"
+consumes:
+  - "module-registry:resolve"
+  - "toolbus:capabilities"
+  - "hotkeys:execute"
+  - "report-bus:build"
+conflicts: []
+outputs:
+  - "agent-orchestration-report"
+errors:
+  - E-INPUT
+  - E-ENV
+  - E-CONFLICT
+  - E-TOOL
+  - E-VALID
+  - E-UNKNOWN
+entry: "modules/agent/index.mjs"

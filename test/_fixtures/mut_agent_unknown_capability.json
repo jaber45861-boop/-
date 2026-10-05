@@ -1,0 +1,7 @@
+{
+  "kind": "hotkey",
+  "module": "hotkeys",
+  "capability": "ghost:capability",
+  "phase": "RUN",
+  "target": { "key": "R" }
+}

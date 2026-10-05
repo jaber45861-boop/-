@@ -1,0 +1,7 @@
+{
+  "kind": "hotkey",
+  "module": "tool-bus",
+  "capability": "toolbus:capabilities",
+  "phase": "RUN",
+  "target": { "key": "R" }
+}
