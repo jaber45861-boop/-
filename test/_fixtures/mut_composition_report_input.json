@@ -1,0 +1,40 @@
+{
+  "type": "completion",
+  "sections": [
+    {
+      "id": "summary",
+      "rows": [
+        { "name": "Module", "value": "plan-execution" },
+        { "name": "Task", "value": "Add input validation to createUser" },
+        { "name": "Tier", "value": "T2" },
+        { "name": "Depth", "value": "document" },
+        { "name": "Execution", "value": "hotkey hotkeys:execute" },
+        { "name": "Code", "value": "COMPLETED" },
+        { "name": "Status", "value": "kinda-done" },
+        { "name": "Stage", "value": "COMPLETE" }
+      ]
+    },
+    {
+      "id": "results",
+      "rows": [
+        {
+          "module": "plan-execution",
+          "status": "kinda-done",
+          "phase_ledger": [
+            "RECEIVE: done (bundle)",
+            "VALIDATE: done (contract)",
+            "PLAN: done (planner → COMPLETED)",
+            "GATE: done (review not required)",
+            "ORCHESTRATE: done (agent → COMPLETED)"
+          ],
+          "artifacts": [],
+          "evidence": ["validate(bundle) → ok (contract)"],
+          "assumptions": []
+        }
+      ]
+    },
+    { "id": "phase-ledger", "rows": ["RECEIVE: done (bundle)"] },
+    { "id": "evidence", "rows": ["validate(bundle) → ok (contract)"] },
+    { "id": "remaining-issues", "rows": [] }
+  ]
+}

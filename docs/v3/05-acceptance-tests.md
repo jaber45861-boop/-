@@ -1112,3 +1112,139 @@ planner is stateless (`01` §5.5 plan updates belong to a session runner);
 to display it; the plan is not wired into the Agent Orchestrator (lateral
 imports are forbidden — composition is a future task); one report type and
 one capability exist, and `plan()` is synchronous.
+
+## Group Q — Plan–Execution Composition Tests (added after Task 11; contract: `20-plan-execution-composition.md`)
+
+Executable with `node --test` from the repo root. File:
+`test/plan-execution.test.mjs` (31 tests, 5 suites); together with Groups A–P's
+197 the suite is **228 tests, 39 suites**. New composition root:
+`composition/plan-execution/` (`index.mjs` entry; `src/errors.mjs` Core-class
+vocabulary, `src/bundle.mjs` the strict `{plan, execution}` envelope,
+`src/composer.mjs` the seven-stage finite lifecycle — **no manifest**, the
+composition root registers nothing). Groups A–P and the 197 prior tests are
+untouched and still pass; Core `01`–`04`, `12`, the six module manifests, and
+the 18 source files are unchanged. This group makes the composition deferred
+by `19` §2/§4/§17/§18 executable: a bundle either flows plan → approval gate →
+orchestration → report, or is refused at the first gate that fails — each
+failure keeping the downstream contract's own code and class, never upgraded
+to success.
+
+**PE-01 Entry point, configuration, vocabularies, no new registry entry (02 §3, 01 §13.5)**
+*Scenario:* Import `composition/plan-execution/index.mjs`; scan its import specifiers; list the directory; construct composers with missing/non-conforming `{planner, agent, reportBus}`; walk `RESULT_CODES`/`LIFECYCLE_STAGES`/`BUNDLE_FIELDS` and cross-check every shared code against the Planner's and the Agent's tables.
+*Pass criteria:* every documented export exists; the entry imports only `./` files; the directory holds exactly `index.mjs` + `src` (no `manifest.yaml` — nothing new registers); every bad dependency throws `E_INPUT_INVALID_COMPOSITION_CONFIG`; exactly 14 result codes (one success, three classified: `REPORT_FAILED`, `EXECUTION_REFUSED`, `EXECUTION_FAILED`) with `APPROVAL_REQUIRED → E-INPUT`; every Planner/Agent code keeps its upstream class; all fixed classes ⊆ `COMPOSITION_ERROR_CLASSES` ⊆ Core seven; the seven lifecycle stages `RECEIVE, VALIDATE, PLAN, GATE, ORCHESTRATE, REPORT, COMPLETE`; `BUNDLE_FIELDS = [plan, execution]`. *Test:* `PE-01`.
+
+**PE-02 Happy path — plan → gate → orchestrate → report → complete (01 §3, 04 §2 rows 4→5)**
+*Scenario:* Run the pristine bundle through the real Planner, real Agent (real registry/runtime/Tool Bus), real Report Bus.
+*Pass criteria:* `ok:true`, `code: COMPLETED`, `stage: COMPLETE`, `error: null`; plan artifact `{tier T2, depth document, 2 changes, review {required:false, trigger:null}}`; `planning` and `orchestration` both COMPLETED with `execution.executed: true`; three hash-valid reports (planner, composer, agent); the composer report shows `| Status | COMPLETED |`, the `plan-execution | plan-execution.execute | success` row, ledger lines `PLAN: done (planner → COMPLETED)`, `GATE: done (review not required)`, `ORCHESTRATE: done (agent → COMPLETED)`, summary Task/Tier/Depth/Execution rows, and the declared-empty issues line. *Test:* `PE-02`.
+
+**PE-03 A planner refusal propagates; execution never runs**
+*Scenario:* The pristine bundle with `plan.tier: "T3"`, through call-recording spies.
+*Pass criteria:* `INVALID_REQUEST` / `REFUSED` at stage `PLAN`, E-INPUT, detail `tier must be one of…`; `planning` carries the planner's attempt and its report; `plan: null`; `orchestration: null`; the planner is called once and the agent **zero** times (no plan → no execution); the composer report shows `| Status | REFUSED |` and the issue `INVALID_REQUEST: tier must be one of…`. *Test:* `PE-03`.
+
+**PE-04 An incomplete plan propagates as PLAN_INCOMPLETE (01 §5.1, AC-10)**
+*Scenario:* The pristine bundle without `plan.risks`.
+*Pass criteria:* `PLAN_INCOMPLETE` / `REFUSED` at `PLAN`, E-VALID; `planning.code === PLAN_INCOMPLETE`; no execution; report hash-valid. *Test:* `PE-04`.
+
+**PE-05 The §5.2 approval gate refuses before any execution**
+*Scenario:* The pristine bundle with `plan.trigger: "migration"`, through spies.
+*Pass criteria:* `APPROVAL_REQUIRED` / `REFUSED` at `GATE`, E-INPUT, detail carries `(migration)` and the approval wording; the plan artifact is attached with `review {required:true, trigger:"migration"}`; the planner itself COMPLETED; the agent is called **zero** times; the composer report shows `| Stage | GATE |`, the issue line, and never `| Status | COMPLETED |`. *Test:* `PE-05`.
+
+**PE-06 An invalid bundle fails closed before any attempt**
+*Scenario:* Nine malformed bundles (null, string, array, `{}`, missing `plan`, missing `execution`, extra field `generated_at`, `plan: null`, `execution: null`) through spies; then the pristine bundle.
+*Pass criteria:* each → `INVALID_REQUEST` / `REFUSED` at `VALIDATE`, E-INPUT, `planning`/`plan`/`orchestration` all null, **neither** downstream called, report present and hash-valid, `validateBundle` itself refuses; the pristine bundle passes the envelope (`validateBundle(REQ) === []`); `normalizeBundle(null) === null`. *Test:* `PE-06`.
+
+**PE-07 Non-conforming downstream attempts fail closed (belts — 01 §13.5)**
+*Scenario:* Six stub planner attempts (undefined; `ok:false` claiming `COMPLETED`; unknown code; completion without artifact; artifact without review state; completion without report) against a recording agent; five stub agent attempts (undefined; contradictory `ok`/`code`; completion without report; without execution; with `executed:false`) behind the real planner.
+*Pass criteria:* planner belts → `PLAN_INCOMPLETE` (E-VALID) or `REPORT_FAILED` (E-VALID fallback) at `PLAN`, each with its named detail, `orchestration: null`, and the agent **never reached**; agent belts → `EXECUTION_REFUSED` (E-ENV fallback) or `REPORT_FAILED` (E-VALID) at `ORCHESTRATE`, each with its named detail; every composer report present and never `| Status | COMPLETED |`. *Test:* `PE-07`.
+
+**PE-08 A malformed execution envelope propagates from the agent (18 §5)**
+*Scenario:* Three execution envelopes: `capability` removed, `capability: "not-a-capability"`, `target` removed — after a successful plan.
+*Pass criteria:* each → the agent's `INVALID_REQUEST` / `REFUSED` at composer stage `ORCHESTRATE`, E-INPUT; `planning.ok === true` with the plan artifact attached; `orchestration.code === INVALID_REQUEST`; report present; never `| Status | COMPLETED |`. *Test:* `PE-08`.
+
+**PE-09 Downstream registry gates propagate (unknown, disabled, phase)**
+*Scenario:* `module: ghost-module`; `module: tool-bus` (registered, not enabled); `phase: DEBUG` (not declared by hotkeys).
+*Pass criteria:* `MODULE_NOT_FOUND` (E-INPUT) / `MODULE_DISABLED` (E-ENV) / `PHASE_NOT_DECLARED` (E-CONFLICT), all at `ORCHESTRATE` with `orchestration.stage: RESOLVE`; the plan artifact is preserved beside the refusal; the disabled case's report never carries the success row. *Test:* `PE-09`.
+
+**PE-10 Capability and tool refusals propagate (unavailable, blocked, missing)**
+*Scenario:* `capability: ghost:capability`; then a Tool Bus faulted `TOOL_UNAVAILABLE`, `TOOL_BLOCKED`, and `DEPENDENCY_MISSING`.
+*Pass criteria:* `CAPABILITY_UNAVAILABLE` (E-ENV); each tool fault → `TOOL_REQUIRED` (E-TOOL) at `ORCHESTRATE` with detail `files: <code>` and `orchestration.stage: PREFLIGHT`; every result `ok:false` with a present report and no completion status. *Test:* `PE-10`.
+
+**PE-11 A downstream runtime refusal propagates as EXECUTION_REFUSED**
+*Scenario:* `target.key: "GHOST"` against the real runtime.
+*Pass criteria:* `EXECUTION_REFUSED` / `REFUSED` at `ORCHESTRATE`, class E-INPUT (the runtime's, not invented), detail contains `E_INPUT_UNKNOWN_KEY`; `orchestration.execution.executed: false`; both downstream and composer reports present and hash-valid. *Test:* `PE-11`.
+
+**PE-12 A downstream handler failure propagates as EXECUTION_FAILED**
+*Scenario:* A runtime whose `grimoire.key.R` handler throws, behind a successful plan.
+*Pass criteria:* `EXECUTION_FAILED` / `FAILED` at `ORCHESTRATE`, class E-UNKNOWN (classified from the runtime), detail contains `E_UNKNOWN_EXCEPTION`; ledger `ORCHESTRATE: failed (EXECUTION_FAILED)`; report never shows completion. *Test:* `PE-12`.
+
+**PE-13 A composer report failure never claims completion**
+*Scenario:* A refusing Report Bus injected for the composer only, on the pristine bundle, then on a planner-refusing bundle.
+*Pass criteria:* `REPORT_FAILED` / `REPORT_FAILED` at `REPORT`, `report: null`, E-ENV from the bus, detail preserves `attempt COMPLETED` (and `attempt INVALID_REQUEST` for the early case — REPORT is terminal); plan, `planning`, and `orchestration` all preserved; ok false. *Test:* `PE-13`.
+
+**PE-14 A planner report failure propagates through the plan stage**
+*Scenario:* A refusing Report Bus injected for the planner only.
+*Pass criteria:* `REPORT_FAILED` / `REPORT_FAILED` at composer stage `PLAN`, E-ENV, detail preserves `attempt COMPLETED`; `planning.report === null`; plan artifact preserved; `orchestration === null` (no plan report → no execution); the composer's own report exists and shows `| Stage | PLAN |` with the issue `REPORT_FAILED: attempt COMPLETED…`. *Test:* `PE-14`.
+
+**PE-15 Wiring — one plan call, one run call, exact order, none on refusal (02 §3)**
+*Scenario:* Record every downstream call for a success, a gated bundle, and an invalid bundle.
+*Pass criteria:* success → exactly one `planner.plan(bundle.plan)` and one `agent.run(bundle.execution)`, receiving the two envelopes untouched; gated → plan once, run zero; invalid → plan zero, run zero (the composer never inverts PLAN → ORCHESTRATE). *Test:* `PE-15`.
+
+**PE-16 Public surface is exactly execute(); sources honor the boundary**
+*Scenario:* Assert the frozen surface; scan every source file for import specifiers and executor APIs; count composer report builds across one success and three refusals.
+*Pass criteria:* surface exactly `execute`, object frozen; all imports `./`-only; no `child_process`/`eval`/`Function`/dynamic import, no handler or file access, no `modules/` paths, no direct `executeHotkey`/tool-check calls; ≥ 4 source files; exactly one composer build per attempt (4 attempts → 4 builds). *Test:* `PE-16`.
+
+**PE-17 Composer → Report Bus — a real completion input, built by the real bus**
+*Scenario:* Wrap `build` to capture inputs for a success and a refusal, then rebuild the captured input independently.
+*Pass criteria:* `type: completion`; sections exactly `summary, results, phase-ledger, evidence, remaining-issues`; results row `module plan-execution`, `command plan-execution.execute`, `status success` (refusal: `failed` with exactly one remaining issue); summary `Code/Status/Stage` rows equal the result; the captured input is contract-valid on its own; final `sha256 == sha256(text)`. *Test:* `PE-17`.
+
+**PE-18 No fabricated completion — only a COMPLETED result reads as success**
+*Scenario:* One success, six refusal shapes, one broken composer bus, one planner report failure, one blocked tool.
+*Pass criteria:* only the success report contains `| Status | COMPLETED |`; every refusal report contains `| Status | REFUSED |` and a present report; the failed report emits nothing (`report: null`, `ok:false`); composer success requires both downstream attempts to succeed. *Test:* `PE-18`.
+
+**PE-19 Determinism: identical bundles against identical state produce identical results**
+*Scenario:* Build fresh composers twice over a success and a refusal; scan report bytes and composer sources.
+*Pass criteria:* `deepStrictEqual(result1, result2)`; byte-identical report text and identical `sha256` (equal to `sha256(text)`); no timestamps, uuids, or machine paths in any report; no `Date.now`/`Math.random`/`process.pid`/`process.env` in any source. *Test:* `PE-19`.
+
+**PE-20 The report always mirrors the result — code, status, stage, issue**
+*Scenario:* Six attempts (success + five refusal shapes); compare each report's summary rows and remaining issue against the returned result.
+*Pass criteria:* `| Code |`, `| Status |`, `| Stage |` always equal the result's own values; every refusal's remaining issues carry exactly `CODE: detail`; success declares the empty list. *Test:* `PE-20`.
+
+**PE-21 No bypass — every downstream non-success stays non-success**
+*Scenario:* A nine-case matrix: incomplete plan, approval-gated plan, disabled module, unavailable capability, blocked/unavailable tools, missing dependency, runtime refusal, handler failure.
+*Pass criteria:* every case `ok:false` with its exact code; `status` never `COMPLETED`; every composer report present and containing neither `| Status | COMPLETED |` nor the `plan-execution… success` row; no gate is ever skipped around. *Test:* `PE-21`.
+
+**Mutations PE-M1…PE-M10 (byte-different fixtures)**
+Each fixture is asserted byte-different from the pristine `composition_request.json` before use (M10 additionally content-different from the pristine report input captured on a successful control run), then must fail closed with its exact code, status, stage, manifest-class error, the exact downstream state that ran (planner/orchestration codes and plan-artifact presence), a present hash-valid composer report (M10: `report === null`), and **no mutation may ever read as completion**:
+
+| Fixture | Exact mutation | Expected failure |
+|---|---|---|
+| `mut_composition_extra_field.json` | bundle field `generated_at` added | `INVALID_REQUEST` (E-INPUT, REFUSED @ VALIDATE, no attempt ran) |
+| `mut_composition_plan_unknown_tier.json` | `plan.tier: "T3"` | `INVALID_REQUEST` (E-INPUT, REFUSED @ PLAN, propagated) |
+| `mut_composition_plan_missing_risks.json` | `risks` removed (T2) | `PLAN_INCOMPLETE` (E-VALID, REFUSED @ PLAN — question 4) |
+| `mut_composition_plan_trigger.json` | `plan.trigger: "migration"` added | `APPROVAL_REQUIRED` (E-INPUT, REFUSED @ GATE, plan attached, no execution) |
+| `mut_composition_execution_malformed.json` | `capability` removed from the execution envelope | `INVALID_REQUEST` (E-INPUT, REFUSED @ ORCHESTRATE, propagated) |
+| `mut_composition_unknown_module.json` | `execution.module: "ghost-module"` | `MODULE_NOT_FOUND` (E-INPUT, REFUSED @ ORCHESTRATE) |
+| `mut_composition_disabled_module.json` | `execution.module: "tool-bus"` (registered, not enabled) | `MODULE_DISABLED` (E-ENV, REFUSED @ ORCHESTRATE) |
+| `mut_composition_unknown_capability.json` | `execution.capability: "ghost:capability"` | `CAPABILITY_UNAVAILABLE` (E-ENV, REFUSED @ ORCHESTRATE) |
+| `mut_composition_execution_refusal.json` | `execution.target.key: "GHOST"` | `EXECUTION_REFUSED` (E-INPUT, REFUSED @ ORCHESTRATE, runtime called) |
+| `mut_composition_report_input.json` | corrupted completion input (`status: "kinda-done"`, missing row fields) fed through the real Report Bus | `REPORT_FAILED` (`report === null`, attempt `COMPLETED` preserved) |
+
+Every non-envelope mutation also asserts the bundle envelope is **valid** —
+its own layer refuses it, each contract validating exactly once at its own
+gate; only M1 fails `validateBundle` itself.
+
+**Composition release gate:** `node --test` = 228/228 pass (39 suites, 0
+skipped, exit 0); PE-01…PE-21 and PE-M1…M10 all covered by named executable
+tests; 10/10 mutations fail closed with byte-different fixtures asserted; two
+identical bundles produce byte-identical reports and equal sha256; Core `01`–`04`
+byte-unchanged; `12` byte-unchanged; source 18/18; all six manifests unchanged
+and still validating; Task 05–11's 197 tests still pass; **no commit or
+push** — implementation/review cycle per the executive directive.
+
+**Known limitations (Group Q):** the approval gate withholds execution but
+cannot grant it — consuming `review.required` is the Task 12 Policy/Approval
+engine named in `18`/`19`, which does not exist yet; plan content is not
+translated into execution requests because no contract defines that mapping
+(the `execution` sub-request is caller-supplied); the composer is stateless
+and synchronous, classifies no tiers, and registers nothing; one bundle shape
+and one report type exist by design for this milestone.
