@@ -1450,6 +1450,17 @@ describe("Policy/Approval negative matrix (NEG-01 … NEG-20)", () => {
       "test/scenarios/fixtures/notes.md",
       "docs/v3/25-real-scenario-test-harness.md",
     ]);
+    // Task-18 boundary extension (documented, same reasoning): the Native
+    // Write Capability contract gate is an investigation-only task — it ships
+    // ONE design artifact and this boundary line. No capability, provider,
+    // handler, runtime, module, or acceptance-test behavior is added, so the
+    // exhaustive two-file list below is the entire authorized surface. Every
+    // OTHER changed path (including any runtime/module/test file) still fails
+    // this gate exactly as before.
+    const TASK18 = new Set([
+      "docs/v3/26-native-write-capability.md",
+      "test/policy-approval.test.mjs",
+    ]);
     // -uall: list every untracked file individually (a plain listing would
     // collapse a brand-new directory to `runtime/` and check no file in it).
     const porcelain = execFileSync("git", ["status", "--porcelain", "-uall"], {
@@ -1462,8 +1473,8 @@ describe("Policy/Approval negative matrix (NEG-01 … NEG-20)", () => {
       .map((line) => line.replace(/^\?\? /, "   ").slice(3).trim());
     for (const file of changed) {
       assert.ok(
-        CS13.has(file) || TASK16.has(file) || TASK17.has(file),
-        `unauthorized change outside CS-13/Task-16/Task-17: ${file}`
+        CS13.has(file) || TASK16.has(file) || TASK17.has(file) || TASK18.has(file),
+        `unauthorized change outside CS-13/Task-16/Task-17/Task-18: ${file}`
       );
     }
     // Nothing registers: no manifest anywhere in the composition root.
