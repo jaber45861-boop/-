@@ -96,6 +96,10 @@ export const RESULT_CODES = Object.freeze({
   E_UNKNOWN_EXCEPTION: "E-UNKNOWN",
   E_ENV_MISSING_FILE: "E-ENV",
   E_TOOL_READ_FAILED: "E-TOOL",
+  // Task 19 ruling 27 §R4 — the ONE newly authorized module-level code: a
+  // native write operation failure on the write path (14 §5/§5.1). E-TOOL,
+  // never a new Core class, never an E_WRITE_* family.
+  E_TOOL_WRITE_FAILED: "E-TOOL",
 });
 
 // Non-enumerable provenance channel: only resolutions issued by

@@ -68,8 +68,22 @@ export function classifyFsError(error, what) {
   return makeError("E-UNKNOWN", "E_UNKNOWN_EXCEPTION", `${what} read failed`, code || String(error && error.name));
 }
 
-/** Classify any exception escaping the pipeline (01 §11.1 E-UNKNOWN fallback). */
+/**
+ * Classify an exception escaping a handler run (01 §11.1). An error that
+ * already carries a structured Grimoire error (the module classified it at
+ * the throw site — e.g. the native write path's `E_TOOL_WRITE_FAILED`,
+ * 27 §R4) is returned as classified; everything else falls through to the
+ * fs mapping and the E-UNKNOWN fallback.
+ */
 export function classifyException(error) {
+  const preClassified = error && typeof error.grimoire === "object" && error.grimoire !== null
+    ? error.grimoire
+    : null;
+  if (preClassified !== null
+      && typeof preClassified.code === "string"
+      && isCoreErrorClass(preClassified.class)) {
+    return preClassified;
+  }
   const code = error && error.code;
   if (code === "ENOENT" || code === "EISDIR" || code === "EACCES" || code === "EPERM" || code === "ELOOP" || code === "ENOTDIR") {
     return classifyFsError(error, "input");

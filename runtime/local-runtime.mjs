@@ -31,7 +31,14 @@
 // same exit code, run after run.
 //
 // CLI (plain Node ESM — no package.json, framework, or server):
-//   node runtime/local-runtime.mjs [--approval grant|deny] <input.json | ->
+//   node runtime/local-runtime.mjs [--approval grant|deny] [--workspace <dir>] <input.json | ->
+//
+// `--workspace <dir>` (Task 21, 24 §3.1) is the EXPLICIT composition-root
+// declaration of a writable native-write workspace: only with it is
+// `handler.save-files` bound to `G`. Without the flag nothing is bound and
+// default behavior stays byte-identical (`G` remains UNIMPLEMENTED). The
+// repository root (resolved from this file, never from cwd) is categorically
+// refused as a workspace — at the flag and again at handler construction.
 //
 // Exit codes (also documented in docs/v3/24-local-runtime.md):
 //   0  COMPLETED — a real success, the only success
@@ -41,7 +48,7 @@
 //   4  agent refusal or failure (orchestration never silently succeeds)
 //   5  report failure (REPORT_FAILED — completion is never claimed)
 
-import { readFileSync, realpathSync } from "node:fs";
+import { readFileSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -59,6 +66,7 @@ import {
   createDefaultProviders,
 } from "../modules/tool-bus/src/capabilities.mjs";
 import { createRuntime } from "../modules/hotkeys/src/runtime.mjs";
+import { DEFAULT_HANDLERS, createSaveFilesHandler } from "../modules/hotkeys/src/handlers.mjs";
 import { createReportBus } from "../modules/report-bus/index.mjs";
 
 /** The repository root this runtime is checked into (never a cwd lookup). */
@@ -69,7 +77,7 @@ const MODULE_IDS = Object.freeze(["hotkeys", "tool-bus", "module-registry", "rep
 const ENABLED_IDS = Object.freeze(["hotkeys"]);
 
 const USAGE =
-  'usage: node runtime/local-runtime.mjs [--approval grant|deny] <input.json | ->';
+  'usage: node runtime/local-runtime.mjs [--approval grant|deny] [--workspace <dir>] <input.json | ->';
 
 /**
  * Disclosed demo verdicts — TEST DOUBLES, usable only when explicitly
@@ -101,12 +109,54 @@ const messageOf = (error) =>
   error && typeof error.message === "string" && error.message !== "" ? error.message : String(error);
 
 /**
+ * Validate an explicitly declared native-write workspace (27 §R3, 24 §3.1).
+ * Returns `{ ok: true, dir }` with the real path, or `{ ok: false, reason }`.
+ * Refused: a value that does not exist, is not a directory, IS the Grimoire
+ * repository root, lies inside it, or contains it (so no path reachable
+ * through the workspace can ever touch the checkout). No implicit fallback:
+ * an absent flag never reaches this function.
+ */
+export function resolveWorkspace(value, repositoryRoot = ROOT) {
+  let real;
+  try {
+    real = realpathSync(path.resolve(value));
+  } catch {
+    return { ok: false, reason: `workspace "${value}" does not exist` };
+  }
+  let stat;
+  try {
+    stat = statSync(real);
+  } catch {
+    return { ok: false, reason: `workspace "${value}" does not exist` };
+  }
+  if (!stat.isDirectory()) {
+    return { ok: false, reason: `workspace "${value}" is not a directory` };
+  }
+  const repositoryReal = realpathSync(path.resolve(repositoryRoot));
+  if (real === repositoryReal) {
+    return { ok: false, reason: "workspace must not be the Grimoire repository root" };
+  }
+  if (real.startsWith(repositoryReal + path.sep)) {
+    return { ok: false, reason: "workspace must be outside the Grimoire repository root" };
+  }
+  if (repositoryReal.startsWith(real + path.sep)) {
+    return { ok: false, reason: "workspace must not contain the Grimoire repository root" };
+  }
+  return { ok: true, dir: real };
+}
+
+/**
  * Construct the real dependencies — explicit wiring, no singletons, no
  * service locator, no environment magic, no side-effect imports. One call
  * = one fresh wiring (fresh registry, fresh report buses); nothing is
- * shared between executions.
+ * shared between executions. `options.workspace` is the explicit
+ * native-write workspace declaration (27 §R3): only when it is present is
+ * `handler.save-files` bound to `grimoire.key.G`; when it is absent the
+ * construction is byte-identical to the Task 16 default (no handler bound,
+ * `G` stays UNIMPLEMENTED).
  */
-export function createLocalDependencies() {
+export function createLocalDependencies(options = {}) {
+  const workspace = options.workspace;
   const registryText = readFileSync(path.join(ROOT, "docs", "v3", "12-hotkey-registry.md"), "utf8");
   const toolBus = createToolBus({
     declarationText: loadCapabilityDeclarations(),
@@ -127,7 +177,13 @@ export function createLocalDependencies() {
       throw new Error(`module ${id} failed to enable: ${JSON.stringify(enabled)}`);
     }
   }
-  const hotkeyRuntime = createRuntime({ registryText, root: ROOT });
+  const hotkeyRuntime = createRuntime({
+    registryText,
+    root: ROOT,
+    handlers: workspace === undefined || workspace === null
+      ? undefined
+      : { ...DEFAULT_HANDLERS, "grimoire.key.G": createSaveFilesHandler({ workspace, repositoryRoot: ROOT }) },
+  });
   const planner = createPlanner({ reportBus: createReportBus() });
   const agent = createAgentOrchestrator({
     registry,
@@ -146,7 +202,7 @@ export function createLocalDependencies() {
  * and this function never fills the slot on its own.
  */
 export function runLocalRuntime(bundle, options = {}) {
-  const dependencies = createLocalDependencies();
+  const dependencies = createLocalDependencies({ workspace: options.workspace });
   const composer = createPlanExecutionComposer({
     planner: options.planner ?? dependencies.planner,
     agent: options.agent ?? dependencies.agent,
@@ -217,6 +273,7 @@ export function main(argv, io = {}) {
 
   let inputPath = null;
   let approvalMode = null;
+  let workspaceFlag = null;
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === "--approval") {
@@ -226,6 +283,14 @@ export function main(argv, io = {}) {
         return usageError('--approval requires "grant" or "deny"');
       }
       approvalMode = value;
+      index += 1;
+    } else if (arg === "--workspace") {
+      if (workspaceFlag !== null) return usageError("--workspace given more than once");
+      const value = argv[index + 1];
+      if (value === undefined || value === "" || value.startsWith("--")) {
+        return usageError("--workspace requires a directory");
+      }
+      workspaceFlag = value;
       index += 1;
     } else if (arg === "-") {
       if (inputPath !== null) return usageError("exactly one input source is allowed");
@@ -239,6 +304,15 @@ export function main(argv, io = {}) {
   }
   if (inputPath === null) return usageError("missing input (a JSON bundle file, or - for stdin)");
 
+  // An explicit workspace is validated as INPUT before anything runs
+  // (invalid input → exit 2; no implicit workspace ever exists).
+  let workspaceDir = null;
+  if (workspaceFlag !== null) {
+    const checked = resolveWorkspace(workspaceFlag, ROOT);
+    if (!checked.ok) return usageError(checked.reason);
+    workspaceDir = checked.dir;
+  }
+
   let bundle;
   try {
     const text = inputPath === "-" ? readStdin() : readFile(inputPath);
@@ -249,10 +323,10 @@ export function main(argv, io = {}) {
   }
 
   try {
-    const result = runLocalRuntime(
-      bundle,
-      approvalMode === null ? {} : { approval: DEMO_APPROVAL[approvalMode] }
-    );
+    const options = {};
+    if (approvalMode !== null) options.approval = DEMO_APPROVAL[approvalMode];
+    if (workspaceDir !== null) options.workspace = workspaceDir;
+    const result = runLocalRuntime(bundle, options);
     out(presentResult(result));
     return exitCodeFor(result);
   } catch (error) {

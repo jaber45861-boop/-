@@ -81,9 +81,9 @@ No new Core error class is introduced; every code maps into one of the seven cla
 | `E_TOOL_UNAVAILABLE` | E-TOOL | declared tool (record or handler) not in `availableTools` | provide the tool; never a silent no-op (`03` §4 H5) |
 | `E_UNKNOWN_EXCEPTION` (+ other `classifyException` codes: `E_ENV_MISSING_FILE`, `E_TOOL_READ_FAILED`, …) | E-UNKNOWN / E-ENV / E-TOOL | handler threw | classified per `01` §11.1; `EXECUTION_ERROR` result, no artifact |
 | `E_INPUT_INVALID_RUNTIME_CONFIG` | E-INPUT | `createRuntime` called with malformed configuration (throws) | fix the configuration |
-| `E_TOOL_WRITE_FAILED` | E-TOOL | **Task 19 R4 only (contract text; no code in Task 20):** a native write operation failed on the write path (permission, filesystem I/O, directory target) | fix the cause; `EXECUTION_ERROR`, no artifact, never `COMPLETED` |
+| `E_TOOL_WRITE_FAILED` | E-TOOL | **Task 19 R4 (implemented Task 21):** a native write operation failed on the write path (permission, filesystem I/O, directory target, containment) | fix the cause; `EXECUTION_ERROR`, no artifact, never `COMPLETED` |
 
-### 5.1 Native write failure mapping (Task 19 ruling `27` §R4 — contract text only)
+### 5.1 Native write failure mapping (Task 19 ruling `27` §R4)
 
 Exactly one module-level failure code is authorized by the Task 19 ruling:
 `E_TOOL_WRITE_FAILED`, classified **E-TOOL**. It is **not** a new Core error class —
@@ -133,11 +133,12 @@ Default handlers in this task:
 | `handler.patch-notes` | `grimoire.key.PN` | opens `PatchNotes.md` | `files` |
 | `handler.open-part` | `grimoire.key.PTn` | opens `Part n` (`args.part` 1–9); resolves the real file set — `Part4` → `Part4_AllLessons.md` — never guesses | `files` |
 
-### 6.1 `handler.save-files` — the native write handler (Task 19 ruling `27` §R1/§R6; **SPECIFIED, NOT IMPLEMENTED**)
+### 6.1 `handler.save-files` — the native write handler (Task 19 ruling `27` §R1/§R6; **implemented Task 21**)
 
-Contract-only in Task 20: no handler code exists yet (`modules/hotkeys/src/handlers.mjs`
-still ships exactly the three default handlers above), and no workspace wiring exists yet.
-This subsection records the binding rules an implementation (Task 21) must satisfy.
+Shipped in `modules/hotkeys/src/handlers.mjs` via the composition-root
+factory `createSaveFilesHandler({ workspace, repositoryRoot })` (manifest
+version bumped to `1.2.0` per `27` §R1). The binding rules below remain the
+contract the implementation satisfies.
 
 | Field | Contract value |
 |---|---|
@@ -229,7 +230,7 @@ constructed without a declared workspace.
 | State | Binding | `G` result |
 |---|---|---|
 | **Default** — no workspace declared (Local Runtime without `--workspace`, default test wiring, HKR-01/HKR-04 construction) | no write handler bound | `UNIMPLEMENTED` / `E_ENV_HANDLER_MISSING`, `status: blocked` — **byte-identical to today** |
-| **Opt-in** — composition root explicitly supplies a valid declared workspace | `G → handler.save-files` (§6.1) | contractually `EXECUTABLE`, subject to args validation, tool gate, and the GATE; covered by **new HKR ids added in Task 21** |
+| **Opt-in** — composition root explicitly supplies a valid declared workspace | `G → handler.save-files` (§6.1) | contractually `EXECUTABLE`, subject to args validation, tool gate, and the GATE; covered by **executable Group U** (`05` Group U, `test/native-write.test.mjs`) and the RT-006 scenario |
 
 What this reconciliation does **not** change: HKR-01's exact split (3/10/1), HKR-04's key
 list (which still contains `G` for the default wiring), `docs/v3/12-hotkey-registry.md`
@@ -261,9 +262,10 @@ Executable with `node --test` from the repo root. File: `test/hkc-runtime.test.m
 
 **Task 19/20 note (no test text changed):** HKR-01 and HKR-04 are **unchanged** — they
 exercise the default (workspace-less) wiring, which this contract keeps byte-identical.
-Workspace-bound `G` behavior is additive: **new HKR ids** (continuing the HKR series) are
-specified for Task 21 together with executable Group U (`05` Group U), and no existing
-assertion may be edited to fit an implementation (`27` §R7, Implementation Gate G6).
+Workspace-bound `G` behavior shipped in Task 21 as **executable Group U** (`05`
+Group U, `test/native-write.test.mjs`, U-01…U-12) plus the RT-006 scenario —
+additive acceptance, with no existing assertion edited to fit the implementation
+(`27` §R7, Implementation Gate G6).
 
 **HKR-11 — the 10 required runtime mutations, all fail safely:**
 
@@ -282,7 +284,12 @@ assertion may be edited to fit an implementation (`27` §R7, Implementation Gate
 
 ## 9. Known limitations (directive §17)
 
-- **10 of 14 ACTIVE records are `UNIMPLEMENTED` in the default wiring.** `W/A/S/SS/D/G/H/C/Q` are conversational prompt-behaviors and `Pi`'s "Interlude n" numbering is ambiguous in source (the first interlude is unnumbered); implementing them here would mean inventing behavior, which the directive forbids. They remain ACTIVE in the registry and report `E_ENV_HANDLER_MISSING` at trigger time. **`G` reconciliation (Task 19 `27` §R7):** `G`'s behavior is now *documented* — identity, `{file, content}` save semantics, workspace root, failure mapping, and approval interaction are fixed by `27` §R1–§R6 and §6.1 above — so the "inventing behavior" objection no longer applies to `G` **once a composition root binds `handler.save-files` with a declared workspace** (Task 21). Until that lands, and always in the default wiring, `G` stays in this list with the reason stated here; `W/A/S/SS/D/H/C/Q` and `Pi` are unchanged.
+- **10 of 14 ACTIVE records are `UNIMPLEMENTED` in the default wiring.** `W/A/S/SS/D/G/H/C/Q` are conversational prompt-behaviors and `Pi`'s "Interlude n" numbering is ambiguous in source (the first interlude is unnumbered); implementing them here would mean inventing behavior, which the directive forbids. They remain ACTIVE in the registry and report `E_ENV_HANDLER_MISSING` at trigger time. **`G` reconciliation (Task 19 `27` §R7):** `G`'s behavior is *documented and, since Task 21,
+implemented* — identity, `{file, content}` save semantics, workspace root, failure mapping,
+and approval interaction are fixed by `27` §R1–§R6 and §6.1 above — so the "inventing
+behavior" objection no longer applies to `G` **when a composition root binds
+`handler.save-files` with a declared workspace**. In the default wiring (no workspace)
+`G` stays in this list with the reason stated here; `W/A/S/SS/D/H/C/Q` and `Pi` are unchanged.
 - **`SoS` is `TOOL_REQUIRED`.** Its record declares the `search providers` tool, which this runtime does not provide; no search behavior is executed or faked.
 - **No external adapters** are implemented; `ADAPTER_REQUIRED` records are refused exactly as Task 05's gate requires.
 - **Handlers return the opened document** (content + fingerprint) because this repository has no UI surface; there is no completion-report loop for hotkey-triggered *tasks* here — `03` §5/H6 remain normative for future task-level integration.
@@ -293,7 +300,7 @@ assertion may be edited to fit an implementation (`27` §R7, Implementation Gate
 
 Same registry + input + handler set + tool availability ⇒ equivalent output. The runtime contains no timestamps, no random ids, no unordered iteration (lookup maps preserve registry order; report rows follow caller order; classification counts follow `EXECUTION_CLASSES` order). Handler outputs are derived from pinned repository files, which are themselves hash-verified by `11` §1 / HKC-17.
 
-**Native write inputs (Task 19 ruling `27` §R6/§10; contract text only).** Native write
+**Native write inputs (Task 19 ruling `27` §R6/§10).** Native write
 behavior depends solely on (a) the explicitly declared execution inputs — `target.key` and
 `args = {file, content}` — and (b) the injected composition dependencies: the handler map
 and the **workspace**, which is an explicit composition-root dependency supplied at wiring

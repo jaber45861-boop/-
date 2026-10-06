@@ -46,7 +46,7 @@ const sha256 = (text) => createHash("sha256").update(text, "utf8").digest("hex")
 const isNonEmpty = (value) => typeof value === "string" && value.trim() !== "";
 const fileSha = (relative) => sha256(fs.readFileSync(path.join(REPO_ROOT, relative), "utf8"));
 
-const SCENARIO_IDS = Object.freeze(["RT-001", "RT-002", "RT-003", "RT-004", "RT-005"]);
+const SCENARIO_IDS = Object.freeze(["RT-001", "RT-002", "RT-003", "RT-004", "RT-005", "RT-006"]);
 
 /** Protected by the directive: unchanged by every scenario. */
 const PROTECTED = Object.freeze([
@@ -111,6 +111,12 @@ describe("Scenario harness — loading, validation, execution (T-01 … T-04)", 
       [{ ...base, faults: ["disk"] }, /unknown fault "disk"/],
       [{ ...base, handler: "delete-everything" }, /handler must be one of/],
       [{ ...base, handler: "workspace-save" }, /requires a declared workspace/],
+      [{ ...base, nativeWorkspace: "yes" }, /nativeWorkspace must be a boolean/],
+      [{ ...base, nativeWorkspace: true }, /nativeWorkspace requires a declared workspace/],
+      [
+        { ...base, workspace: { files: ["notes.md"] }, handler: "workspace-save", nativeWorkspace: true },
+        /nativeWorkspace cannot be combined with an injected handler/,
+      ],
       [{ ...base, workspace: { files: ["../escape.md"] } }, /workspace-relative name/],
       [{ ...base, workspace: { files: [] } }, /workspace.files must be a non-empty array/],
       [{ ...base, variants: [{ name: "" }] }, /name must be a non-empty, unique string/],
@@ -157,15 +163,15 @@ describe("Scenario harness — loading, validation, execution (T-01 … T-04)", 
     const results = runAll();
     assert.strictEqual(results.length, SCENARIO_IDS.length);
     assert.deepStrictEqual(results.map((result) => result.id), SCENARIO_IDS);
-    assert.deepStrictEqual(results.map((result) => result.status), Array(5).fill("PASS"));
+    assert.deepStrictEqual(results.map((result) => result.status), Array(6).fill("PASS"));
     const rendered = renderReport(results);
-    assert.ok(rendered.includes("SUMMARY scenarios=5 passed=5 failed=0 harnessFailures=0"));
+    assert.ok(rendered.includes("SUMMARY scenarios=6 passed=6 failed=0 harnessFailures=0"));
     for (const id of SCENARIO_IDS) assert.ok(rendered.includes(`SCENARIO ${id}`));
 
     const { buffers, io } = capture();
     assert.strictEqual(main(["--all"], io), 0);
     assert.strictEqual(buffers.err, "");
-    assert.ok(buffers.out.includes("SUMMARY scenarios=5 passed=5"));
+    assert.ok(buffers.out.includes("SUMMARY scenarios=6 passed=6"));
     assert.strictEqual(main(["RT-003"], io), 0);
     assert.strictEqual(main([], io), 2, "no argument is a usage error");
     assert.strictEqual(main(["--all", "RT-001"], io), 2, "--all takes no id");

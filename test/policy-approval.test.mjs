@@ -1490,6 +1490,33 @@ describe("Policy/Approval negative matrix (NEG-01 … NEG-20)", () => {
       "docs/v3/05-acceptance-tests.md",
       "test/policy-approval.test.mjs",
     ]);
+    // Task-21 boundary extension (documented, same reasoning): the Native
+    // Write Capability Implementation is authorized by the Task 19 ruling
+    // (`27` R1–R7) and the Task 20 contracts. It ships the handler.save-files
+    // factory + write-path classification in the hotkeys module, the hotkeys
+    // manifest semver bump, the Local Runtime --workspace flag, the RT-006
+    // production-path scenario, the executable Group U suite, and the
+    // contract-document synchronizations those imply. No Planner, Agent,
+    // Tool Bus, Module Registry, Composition, report, or protected contract
+    // file is added, so this exhaustive fourteen-file list is the entire
+    // authorized surface. Every OTHER changed path still fails this gate
+    // exactly as before.
+    const TASK21 = new Set([
+      "modules/hotkeys/src/handlers.mjs",
+      "modules/hotkeys/src/errors.mjs",
+      "modules/hotkeys/src/runtime.mjs",
+      "modules/hotkeys/manifest.yaml",
+      "runtime/local-runtime.mjs",
+      "test/scenario-harness.mjs",
+      "test/scenario-harness.test.mjs",
+      "test/scenarios/RT-006.json",
+      "test/native-write.test.mjs",
+      "test/policy-approval.test.mjs",
+      "docs/v3/05-acceptance-tests.md",
+      "docs/v3/14-hotkey-runtime.md",
+      "docs/v3/24-local-runtime.md",
+      "docs/v3/25-real-scenario-test-harness.md",
+    ]);
     // -uall: list every untracked file individually (a plain listing would
     // collapse a brand-new directory to `runtime/` and check no file in it).
     const porcelain = execFileSync("git", ["status", "--porcelain", "-uall"], {
@@ -1502,8 +1529,8 @@ describe("Policy/Approval negative matrix (NEG-01 … NEG-20)", () => {
       .map((line) => line.replace(/^\?\? /, "   ").slice(3).trim());
     for (const file of changed) {
       assert.ok(
-        CS13.has(file) || TASK16.has(file) || TASK17.has(file) || TASK18.has(file) || TASK19.has(file) || TASK20.has(file),
-        `unauthorized change outside CS-13/Task-16/Task-17/Task-18/Task-19/Task-20: ${file}`
+        CS13.has(file) || TASK16.has(file) || TASK17.has(file) || TASK18.has(file) || TASK19.has(file) || TASK20.has(file) || TASK21.has(file),
+        `unauthorized change outside CS-13/Task-16/Task-17/Task-18/Task-19/Task-20/Task-21: ${file}`
       );
     }
     // Nothing registers: no manifest anywhere in the composition root.

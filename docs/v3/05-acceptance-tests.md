@@ -1513,7 +1513,7 @@ listed `detail` unless another code is named.
 | **NEG-17** agent called after refusal | Any refusal shape D0–D6 through call-recording spies | **REFUSE** | The case's exact detail | **0** | refusal report present; `orchestration: null`; never completion | R-08, R-15 |
 | **NEG-18** report after invalid gate transition | Refusal at GATE (attempted crossing without valid approval) | **REFUSE** | The case's exact detail | 0 | composer report mirrors `REFUSED` @ `GATE` with issue `APPROVAL_REQUIRED: <detail>`; approval component emits **no** report; no completion row, no success row | R-13, R-08 |
 | **NEG-19** bypass attempt around GATE | Caller appends an `approval` member to the bundle envelope (C1-style bypass) | **REFUSE** at **VALIDATE** | `INVALID_REQUEST`, E-INPUT (strict envelope — approval is never envelope data) | 0 | refusal report @ `VALIDATE`; GATE never reached; no approval evidence line | R-01, PE-06 |
-| **NEG-20** unauthorized change outside CS-13 | Repository diff vs protected pins (Core `01`–`04`/`12`, planner, agent, manifests, runtime), vs CS-13's exhaustive file list, and vs the Task-16 through Task-20 boundary lists (each extended by its own directive: Task 16 = `runtime/local-runtime.mjs`, `test/local-runtime.test.mjs`, `docs/v3/24-local-runtime.md`, `test/_fixtures/local_runtime_gated.json`; Task 17 = `test/scenario-harness.mjs`, `test/scenario-harness.test.mjs`, `test/scenarios/RT-001…RT-005.json`, `test/scenarios/fixtures/notes.md`, `docs/v3/25-real-scenario-test-harness.md`; Task 18 = `docs/v3/26-native-write-capability.md`, `test/policy-approval.test.mjs`; Task 19 = `docs/v3/27-native-write-capability-ruling.md`, `docs/v3/26-native-write-capability.md`, `docs/v3/05-acceptance-tests.md`, `test/policy-approval.test.mjs`; Task 20 = `docs/v3/14-hotkey-runtime.md`, `docs/v3/24-local-runtime.md`, `docs/v3/25-real-scenario-test-harness.md`, `docs/v3/05-acceptance-tests.md`, `test/policy-approval.test.mjs`) | **PASS** iff changed files ⊆ CS-13 ∪ Task-16 ∪ Task-17 ∪ Task-18 ∪ Task-19 ∪ Task-20 lists; else test failure | none in runtime; assertion names the unauthorized file | 0 (static check — no `execute()`) | no report emitted (static/pin test, HKC-17 pattern) | R-09 scans + release gate |
+| **NEG-20** unauthorized change outside CS-13 | Repository diff vs protected pins (Core `01`–`04`/`12`, planner, agent, manifests, runtime), vs CS-13's exhaustive file list, and vs the Task-16 through Task-21 boundary lists (each extended by its own directive: Task 16 = `runtime/local-runtime.mjs`, `test/local-runtime.test.mjs`, `docs/v3/24-local-runtime.md`, `test/_fixtures/local_runtime_gated.json`; Task 17 = `test/scenario-harness.mjs`, `test/scenario-harness.test.mjs`, `test/scenarios/RT-001…RT-005.json`, `test/scenarios/fixtures/notes.md`, `docs/v3/25-real-scenario-test-harness.md`; Task 18 = `docs/v3/26-native-write-capability.md`, `test/policy-approval.test.mjs`; Task 19 = `docs/v3/27-native-write-capability-ruling.md`, `docs/v3/26-native-write-capability.md`, `docs/v3/05-acceptance-tests.md`, `test/policy-approval.test.mjs`; Task 20 = `docs/v3/14-hotkey-runtime.md`, `docs/v3/24-local-runtime.md`, `docs/v3/25-real-scenario-test-harness.md`, `docs/v3/05-acceptance-tests.md`, `test/policy-approval.test.mjs`; Task 21 = `modules/hotkeys/src/handlers.mjs`, `modules/hotkeys/src/errors.mjs`, `modules/hotkeys/src/runtime.mjs`, `modules/hotkeys/manifest.yaml`, `runtime/local-runtime.mjs`, `test/scenario-harness.mjs`, `test/scenario-harness.test.mjs`, `test/scenarios/RT-006.json`, `test/native-write.test.mjs`, `test/policy-approval.test.mjs`, `docs/v3/05-acceptance-tests.md`, `docs/v3/14-hotkey-runtime.md`, `docs/v3/24-local-runtime.md`, `docs/v3/25-real-scenario-test-harness.md`) | **PASS** iff changed files ⊆ CS-13 ∪ Task-16 ∪ Task-17 ∪ Task-18 ∪ Task-19 ∪ Task-20 ∪ Task-21 lists; else test failure | none in runtime; assertion names the unauthorized file | 0 (static check — no `execute()`) | no report emitted (static/pin test, HKC-17 pattern) | R-09 scans + release gate |
 
 **R-M mutation fixtures (specification — land atomically with CS-13; each
 asserted byte-different from pristine `composition_request.json` before use;
@@ -1683,26 +1683,30 @@ Agent, never edits an Agent result, and never converts a failure into a pass.
 Every scenario runs the real Planner, Plan–Execution Composition, approval
 GATE, Agent Orchestrator, Module Registry, Tool Bus, Hotkey Runtime, and Report
 Bus. The executable file `test/scenario-harness.test.mjs` names **T-01…T-12**
-(12 tests, 4 suites), so the suite is Groups A–S's **279** plus Group T's
-**12** = **291 tests, 49 suites, 0 failures, 0 skipped**
-(`node --test test/*.test.mjs`). Scenario definitions live in
-`test/scenarios/RT-001…RT-005.json` with a committed fixture in
+(12 tests, 4 suites), so at Task 17 the suite was Groups A–S's **279** plus
+Group T's **12** = **291 tests, 49 suites, 0 failures, 0 skipped**
+(`node --test test/*.test.mjs`); the suite later grew with Group U — current
+totals are stated in the Group U release gate below. Scenario definitions
+live in `test/scenarios/RT-001…RT-006.json` (`RT-006`, the native-write
+trial, added by Task 21) with a committed fixture in
 `test/scenarios/fixtures/notes.md`; the CLI is
 `node test/scenario-harness.mjs <RT-xxx>` / `--all` (exit 0 all pass, 2 usage,
 3 scenario failed, 4 harness failure).
 
 **T-01 Scenario loading**
 *Scenario:* Load every definition through `loadScenarios()` / `loadScenario()`.
-*Pass criteria:* exactly five definitions, ids `RT-001…RT-005` in order and
+*Pass criteria:* exactly six definitions, ids `RT-001…RT-006` in order and
 unique; each validates clean and declares `id`, `name`, `description`, `input`,
 `expected`, a real task, and an explicit execution target; an unknown id throws
 `E_UNKNOWN_SCENARIO`. *Test:* `T-01`.
 
 **T-02 Validation fails closed**
-*Scenario:* Eighteen malformed definitions (bad id, empty name, unknown
+*Scenario:* Twenty-one malformed definitions (bad id, empty name, unknown
 scenario/expected/result/counts fields, non-integer exit code, unknown
-approval/fault/handler, a writing handler without a workspace, an escaping
-workspace path, an empty file list, a nameless variant, a non-object).
+approval/fault/handler, a writing handler without a workspace, native-
+workspace field misuse — non-boolean, workspace-less, or combined with an
+injected handler, an escaping workspace path, an empty file list, a nameless
+variant, a non-object).
 *Pass criteria:* each produces at least one named violation matching its
 pattern; each such definition is REPORTED as `HARNESS_FAILURE` / `FAIL` with
 zero runs executed — never a partial run and never a pass; the outcome
@@ -1718,8 +1722,8 @@ at least 15 assertions; result `COMPLETED` @ `COMPLETE`, exit code 0, a
 **T-04 All scenarios execution and CLI**
 *Scenario:* `runAll()`, then `main(["--all"])`, `main(["RT-003"])`,
 `main([])`, `main(["--all","RT-001"])`.
-*Pass criteria:* five results in id order, all `PASS`, one
-`SUMMARY scenarios=5 passed=5 failed=0 harnessFailures=0` line; `--all` exits
+*Pass criteria:* six results in id order, all `PASS`, one
+`SUMMARY scenarios=6 passed=6 failed=0 harnessFailures=0` line; `--all` exits
 0 with empty stderr; missing/contradictory arguments exit 2 with the usage
 line. *Test:* `T-04`.
 
@@ -1807,13 +1811,15 @@ byte-unchanged; NEG-20's boundary extended by the nine-file Task-17 list only
 
 ## Group U — Native Write Capability (added Task 20; contracts: `14` §5.1/§6.1/§7.1, `24` §3.1, `25` §11; ruling: `27`)
 
-**Status: SPECIFIED — NOT IMPLEMENTED.** Group U is the authoritative future
-acceptance group for the native write capability authorized by the Task 19
-ruling (`27`). Task 20 is contract-only: it specifies these cases and adds no
-executable tests; the implementation task lands them. Every item derives
-directly from ruling R1–R7. Until then the suite count is unchanged (**291
-tests, 49 suites**), no `U-*` test file and no `RT-006.json` exist, and no
-existing group may be weakened to make room for them.
+**Status: EXECUTABLE — landed with the Native Write Capability implementation
+(Task 21).** Group U is the authoritative acceptance group for the native
+write capability authorized by the Task 19 ruling (`27`) and specified by
+Task 20. The executable file is `test/native-write.test.mjs` (**U-01…U-12**,
+14 tests, 6 suites), and the real native-write trial is the scenario
+`test/scenarios/RT-006.json` (four runs: create, overwrite, gated refusal,
+gated approval — through the production path, no injected handler). Every
+item derives directly from ruling R1–R7; no existing group was weakened to
+make room for them.
 
 **U-01 Native G identity and handler binding [S/R]**
 *Scenario:* Resolve `G` twice: once with no declared workspace, once with a
@@ -1912,20 +1918,30 @@ failure.
 `E_WRITE_*` family anywhere. **No write failure may ever produce COMPLETED**,
 and report/completion semantics are unchanged from Groups A–T.
 
-**RT-006 — the real native-write trial [R] (specified, not implemented):**
+**RT-006 — the real native-write trial [R] (executable as of Task 21):**
 `test/scenarios/RT-006.json` runs the production/native capability path — the
 production factory with an explicitly declared workspace (`24` §3.1) wired to
 `handler.save-files` — with NO injected handler for the trial leg, while the
 existing `createRuntime({handlers})` injection seam stays intact and the
 RT-002/RT-003/RT-005 behavior stays unchanged and independently testable
-(`25` §11). RT-006 lands with the implementation (Task 21), not with this
-specification.
+(`25` §11). The primary run creates exactly one UTF-8 file; an overwrite leg
+proves full replacement; the gated legs prove the single GATE refuses before
+any write (agent count 0, no file) and, with an explicit grant after exactly
+one verification, the same write executes. Runs: `node
+test/scenario-harness.mjs RT-006`.
 
-**Group U release gate (Task 20 — specification only):**
+**Group U release gate (Task 21):**
 
-Full suite `node --test test/*.test.mjs` = **291 (Groups A–T)**, 49 suites,
-0 failures, 0 skipped, exit 0; zero executable Group U or RT-006 tests added;
-Groups A–T untouched; Core `01`–`04`, `12`, `22`, `23`,
-`runtime/local-runtime.mjs`, and `modules/tool-bus/capabilities.json`
-byte-unchanged; NEG-20's boundary extended by the five-file Task-20 list only
-(documented in its row above and in the test itself).
+`test/native-write.test.mjs` green (14/14, U-01…U-12); `node
+test/scenario-harness.mjs RT-006` exits 0 with all four runs asserted
+(create, overwrite, gated-without-approval, gated-approved);
+`node test/scenario-harness.mjs --all` exits 0 with
+`SUMMARY scenarios=6 passed=6 failed=0 harnessFailures=0` and byte-identical
+output across repeated runs; full suite `node --test test/*.test.mjs` =
+**305 (291 + Group U 14)**, 55 suites, 0 failures, 0 skipped, exit 0;
+Groups A–T untouched (PE-05, PE-21, M4, HKR, TB, RT-001…RT-005 green);
+Core `01`–`04`, `12`, `22`, `23` and `modules/tool-bus/capabilities.json`
+byte-unchanged; `runtime/local-runtime.mjs` changed only by the explicitly
+authorized `--workspace` opt-in (24 §3.1 and the Task 21 directive) with
+default behavior byte-compatible; NEG-20's boundary extended by the fourteen-file
+Task-21 list only (documented in its row above and in the test itself).

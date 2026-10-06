@@ -79,7 +79,7 @@ change the Local Runtime's exit semantics (`24` §8).
 
 ```bash
 node test/scenario-harness.mjs --all
-echo $?   # 0 when all five pass
+echo $?   # 0 when all six pass
 ```
 
 The acceptance suite for the harness runs with everything else:
@@ -107,7 +107,7 @@ node --test test/*.test.mjs                  # the whole repository suite
    Each variant is an independent execution in the same scenario; one scenario
    never depends on another.
 5. Measure the real values once (`node test/scenario-harness.mjs RT-00X`
-   prints METRICS and the actual report fingerprint) and pin them, as the five
+   prints METRICS and the actual report fingerprint) and pin them, as the six
    shipped scenarios do.
 
 ## 5. How do fixtures work?
@@ -187,15 +187,14 @@ harness failure.
   that Grimoire can develop software autonomously, and they prove nothing
   about LLM-driven planning, multi-file editing, memory, or long-running loops
   — none of that exists in this repository yet.
-- The shipped Grimoire modules implement only read behaviours (`R`, `PN`,
-  `PTn`). A change that WRITES needs a behaviour, so RT-002/RT-003/RT-005
+- Before Task 21 the shipped Grimoire modules implemented only read behaviours (`R`, `PN`,
+  `PTn`), so a change that WRITES needed a supplied behaviour: RT-002/RT-003/RT-005
   supply one through the documented `createRuntime({handlers})` injection
   point, bound to the ACTIVE registry record `G` ("save your files"). The
   Agent, gate, registry, and reports are real; the scenario-provided handler is
-  the only scenario-specific piece. Shipping write behaviour as a Grimoire
-  module is a future task (Task 21, specified by `14` §6.1 and Group U in
-  `05`), not this one; the injected leg described above stays independently
-  testable after it lands (§11).
+  the only scenario-specific piece. Task 21 shipped write behaviour as Grimoire
+  module code (`handler.save-files`, `14` §6.1); the injected leg described above
+  remains independently testable alongside the native path (§11).
 - RT-005's report-failure leg uses one declared harness fault
   (`faults: ["composer-report-bus"]`) to reach a state the repository cannot
   reach from real input. Every other leg runs the unmodified contracts.
@@ -204,8 +203,7 @@ harness failure.
 
 ## 11. Future native-write coverage — two handler paths
 
-**Specified by Task 20; nothing here is implemented in Task 20.** When the
-native write capability lands (Task 21), the harness must keep two distinct,
+**Specified by Task 20; implemented by Task 21.** The harness keeps two distinct,
 independently testable paths to a `G` handler:
 
 1. **Production / native capability path.** The trial uses the production
@@ -223,8 +221,8 @@ independently testable paths to a `G` handler:
    faults and read-only substitutes; it is not replaced or retired when the
    native path arrives.
 
-The real native-write trial is **RT-006** — specified here and in Group U
-(`05`), **not implemented in Task 20**. Until Task 21, the harness ships no
-`RT-006.json`, no production-path handler wiring, and no Group U executable
-tests; `node test/scenario-harness.mjs --all` continues to run exactly the
-scenarios Task 17 shipped.
+The real native-write trial is **RT-006** — specified in Group U (`05`) and
+`test/scenarios/RT-006.json`, **shipped in Task 21**. It runs the production
+path (create, overwrite, gated refusal, gated approval) while the injected
+leg keeps RT-002/RT-003/RT-005 unchanged; `node test/scenario-harness.mjs
+--all` runs all six scenarios.

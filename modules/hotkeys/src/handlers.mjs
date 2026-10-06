@@ -144,9 +144,226 @@ function validatePartArgs(args) {
 }
 
 // ---------------------------------------------------------------------------
+// The native write handler (Task 19 ruling `27` §R1/§R2/§R3; contract 14 §6.1)
+//
+// `handler.save-files` is L2 hotkey-module code — NOT a Tool Bus provider,
+// NOT a new module, NOT a `grimoire.adapter.*`, NOT runtime-global fs
+// behavior, and NOT an authorization point (the single GATE decides; this
+// handler performs argument validation and workspace containment only).
+// It exists only through `createSaveFilesHandler`, which the composition
+// root calls with an EXPLICITLY declared workspace (Local Runtime
+// `--workspace <dir>`, harness scenario workspace). With no workspace no
+// handler is bound, so `G` stays UNIMPLEMENTED exactly as before (14 §7.1).
+// ---------------------------------------------------------------------------
+
+/** Refuse a save request before any filesystem call (27 §R4 row 1: E-INPUT). */
+function invalidSave(message) {
+  return { ok: false, code: "E_INPUT_INVALID_ARGS", message };
+}
+
+/**
+ * The pure argument check for `save`: exactly `{file, content}` and the
+ * §6.1.1 path grammar, plus lexical containment against the declared
+ * workspace — no filesystem call happens here (14 §6.1). A symlink escape
+ * is not observable purely; it is caught by the real-path containment belt
+ * inside `run` (27 §R4 row 2).
+ */
+function validateSaveArgs(workspaceReal) {
+  return (args) => {
+    if (typeof args !== "object" || args === null || Array.isArray(args)) {
+      return invalidSave("save requires exactly args {file, content}");
+    }
+    const keys = Object.keys(args).sort();
+    if (keys.length !== 2 || keys[0] !== "content" || keys[1] !== "file") {
+      return invalidSave("save requires exactly args {file, content}");
+    }
+    const { file, content } = args;
+    if (typeof file !== "string" || file === "") {
+      return invalidSave("args.file must be a non-empty string");
+    }
+    if (file.includes("\u0000") || /[\r\n]/.test(file)) {
+      return invalidSave("args.file must not contain NUL or newline characters");
+    }
+    if (file.startsWith("/") || file.includes(":") || file.includes("\\")) {
+      return invalidSave("args.file must be a relative /-separated path (no drive, colon, backslash)");
+    }
+    if (file.endsWith("/")) {
+      return invalidSave("args.file must not end with /");
+    }
+    const segments = file.split("/");
+    if (segments.some((segment) => segment === "" || segment === "." || segment === "..")) {
+      return invalidSave("args.file must contain no empty, '.' or '..' segments");
+    }
+    if (typeof content !== "string") {
+      return invalidSave("args.content must be a string");
+    }
+    if (content === "") {
+      return invalidSave("args.content must be non-empty");
+    }
+    if (content.includes("\u0000")) {
+      return invalidSave("args.content must not contain NUL characters");
+    }
+    const resolved = path.resolve(workspaceReal, file);
+    if (resolved !== workspaceReal && !resolved.startsWith(workspaceReal + path.sep)) {
+      return invalidSave("args.file resolves outside the declared workspace");
+    }
+    return { ok: true };
+  };
+}
+
+/** A write-path failure: the ONE newly authorized module code (27 §R4). */
+function writeFailure(message, detail) {
+  const error = new Error(message);
+  error.code = "E_TOOL_WRITE_FAILED";
+  error.grimoire = makeError("E-TOOL", "E_TOOL_WRITE_FAILED", message, detail === undefined ? null : detail);
+  return error;
+}
+
+/** Real-path containment with a separator boundary (/workspace ≠ /workspace-other). */
+const isInside = (target, root) => target === root || target.startsWith(root + path.sep);
+
+/**
+ * The one `save` operation (27 §R2): create-or-overwrite of exactly one
+ * UTF-8 text file inside the declared workspace. No append, no mkdir, no
+ * rename/move/delete, no binary mode, no multi-file — and no atomicity
+ * claim. Failure mapping (27 §R4, 14 §5.1):
+ *   ENOENT (missing parent)  → thrown as-is → E_ENV_MISSING_FILE · E-ENV
+ *   containment / EISDIR /
+ *   EACCES / EPERM / ELOOP … → E_TOOL_WRITE_FAILED · E-TOOL
+ *   anything else            → E_UNKNOWN_EXCEPTION (classifyException)
+ */
+function saveFilesRun(workspaceReal) {
+  return ({ args }) => {
+    const target = path.resolve(workspaceReal, args.file);
+    // Real-path containment of the parent directory (27 §R3.4): a symlink
+    // anywhere along the parent chain that redirects outside is refused.
+    let realParent;
+    try {
+      realParent = fs.realpathSync(path.dirname(target));
+    } catch (error) {
+      if (error && error.code === "ENOENT") throw error; // missing parent → E_ENV_MISSING_FILE
+      throw writeFailure("workspace parent path could not be resolved", error && error.code ? String(error.code) : "unknown");
+    }
+    if (!isInside(realParent, workspaceReal)) {
+      throw writeFailure("target escapes the declared workspace", "containment");
+    }
+    let writePath = path.join(realParent, path.basename(target));
+    let existed = true;
+    try {
+      const stat = fs.lstatSync(writePath);
+      if (stat.isSymbolicLink()) {
+        let real;
+        try {
+          real = fs.realpathSync(writePath);
+        } catch (error) {
+          throw writeFailure("symlink target could not be resolved inside the workspace", error && error.code ? String(error.code) : "unknown");
+        }
+        if (!isInside(real, workspaceReal)) {
+          throw writeFailure("symlink escapes the declared workspace", "containment");
+        }
+        writePath = real;
+      }
+    } catch (error) {
+      if (error && error.code === "E_TOOL_WRITE_FAILED") throw error;
+      if (error && error.code === "ENOENT") existed = false;
+      else throw writeFailure("workspace target could not be inspected", error && error.code ? String(error.code) : "unknown");
+    }
+    if (existed) {
+      let stat;
+      try {
+        stat = fs.statSync(writePath);
+      } catch (error) {
+        if (error && error.code === "ENOENT") stat = null;
+        else throw writeFailure("workspace target could not be inspected", error && error.code ? String(error.code) : "unknown");
+      }
+      if (stat !== null && stat.isDirectory()) {
+        throw writeFailure("target is a directory", "EISDIR"); // directory target → E_TOOL_WRITE_FAILED
+      }
+      if (stat !== null && !stat.isFile()) {
+        throw writeFailure("target is not a regular file", "unsupported target type");
+      }
+    }
+    try {
+      fs.writeFileSync(writePath, args.content, { encoding: "utf8" });
+    } catch (error) {
+      if (error && error.code === "ENOENT") throw error;
+      throw writeFailure("native write failed", error && error.code ? String(error.code) : "unknown");
+    }
+    return {
+      file: args.file,
+      bytes: Buffer.byteLength(args.content, "utf8"),
+      lines: args.content.split("\n").length,
+      sha256: createHash("sha256").update(args.content, "utf8").digest("hex"),
+      content: args.content,
+    };
+  };
+}
+
+/**
+ * Composition-root factory (27 §R3, 14 §6.1): build `handler.save-files`
+ * bound to one EXPLICITLY declared workspace. Construction refuses an
+ * invalid workspace configuration — missing, non-directory, or any path
+ * that equals, contains, or is contained by the Grimoire repository root —
+ * so no implicit, environment-, cwd-, or repo-derived workspace can exist.
+ * Returns a handler ready for the `createRuntime({ handlers })` map keyed
+ * by `grimoire.key.G`.
+ */
+export function createSaveFilesHandler({ workspace, repositoryRoot } = {}) {
+  const configFailure = (message, detail) => {
+    const error = new Error(message);
+    error.code = "E_INPUT_INVALID_RUNTIME_CONFIG";
+    error.grimoire = makeError("E-INPUT", "E_INPUT_INVALID_RUNTIME_CONFIG", message, detail === undefined ? null : detail);
+    return error;
+  };
+  if (typeof workspace !== "string" || workspace.trim() === "") {
+    throw configFailure("workspace must be a non-empty explicit composition-root declaration", typeof workspace);
+  }
+  if (typeof repositoryRoot !== "string" || repositoryRoot.trim() === "") {
+    throw configFailure("repositoryRoot must be a non-empty string", typeof repositoryRoot);
+  }
+  let workspaceReal;
+  try {
+    workspaceReal = fs.realpathSync(path.resolve(workspace));
+  } catch {
+    throw configFailure("workspace must exist", workspace);
+  }
+  let workspaceStat;
+  try {
+    workspaceStat = fs.statSync(workspaceReal);
+  } catch {
+    throw configFailure("workspace must exist", workspace);
+  }
+  if (!workspaceStat.isDirectory()) {
+    throw configFailure("workspace must be a directory", workspace);
+  }
+  const repositoryReal = fs.realpathSync(path.resolve(repositoryRoot));
+  // The Grimoire repository root is categorically not a writable workspace
+  // (27 §R3.3): equal, inside, or containing — all refused at construction.
+  if (workspaceReal === repositoryReal) {
+    throw configFailure("the Grimoire repository root is not a writable native-write workspace");
+  }
+  if (workspaceReal.startsWith(repositoryReal + path.sep)) {
+    throw configFailure("workspace must be outside the Grimoire repository root");
+  }
+  if (repositoryReal.startsWith(workspaceReal + path.sep)) {
+    throw configFailure("workspace must not contain the Grimoire repository root");
+  }
+  return defineHandler({
+    id: "handler.save-files",
+    command: "grimoire.key.G",
+    requiredTools: ["files"],
+    validateArgs: validateSaveArgs(workspaceReal),
+    run: saveFilesRun(workspaceReal),
+  });
+}
+
+// ---------------------------------------------------------------------------
 // The default handler set (Task 06): three documented document-open
 // behaviors. Every other ACTIVE record stays UNIMPLEMENTED until a real,
 // documented behavior exists — see docs/v3/14-hotkey-runtime.md §9.
+// `handler.save-files` is deliberately NOT in this set: it exists only via
+// createSaveFilesHandler with an explicit workspace (14 §6.1 availability
+// rule), so the default wiring stays byte-identical.
 // ---------------------------------------------------------------------------
 
 /** Tools this runtime provides by default (manifest `requires.tools`). */

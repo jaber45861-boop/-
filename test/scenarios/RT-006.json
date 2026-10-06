@@ -1,0 +1,190 @@
+{
+  "id": "RT-006",
+  "name": "Real native write trial through the production path",
+  "description": "The native capability specified by Task 20 (25 §11, 05 Group U RT-006): the harness acts as composition root and binds the SHIPPED handler.save-files factory to the scenario's explicitly declared, isolated workspace — no scenario handler is injected, and the Hotkey Runtime, Agent, Tool Bus, Module Registry, Composition, approval GATE, and Report Bus are all real. The primary run creates exactly one UTF-8 file; the overwrite leg re-saves it with new content (R2 create-or-overwrite); the gated legs prove the single GATE precedes every write — without approval the run refuses at GATE with zero agent calls and no file appears, with an explicit grant the same write executes after exactly one verification.",
+  "workspace": { "files": ["notes.md"] },
+  "nativeWorkspace": true,
+  "approval": "none",
+  "input": {
+    "plan": {
+      "task": "Create the native-write trial file in the scenario workspace",
+      "tier": "T2",
+      "changes": [
+        { "file": "rt-006.md", "why": "prove the production native save path end to end" }
+      ],
+      "verification": ["read back rt-006.md and compare the reported sha256"],
+      "risks": ["the write must stay inside the isolated scenario workspace"]
+    },
+    "execution": {
+      "kind": "hotkey",
+      "module": "hotkeys",
+      "capability": "hotkeys:execute",
+      "phase": "RUN",
+      "target": { "key": "G" },
+      "args": {
+        "file": "rt-006.md",
+        "content": "RT-006: created by handler.save-files through the production path.\n"
+      }
+    }
+  },
+  "expected": {
+    "outcome": "PASS",
+    "exitCode": 0,
+    "result": { "ok": true, "code": "COMPLETED", "status": "COMPLETED", "stage": "COMPLETE" },
+    "counts": { "planner": 1, "approval": 0, "agent": 1, "report": 1, "toolChecks": 5 },
+    "execution": {
+      "executed": true,
+      "classification": "EXECUTABLE",
+      "code": "OK_EXECUTED",
+      "outputFile": "rt-006.md"
+    },
+    "evidenceContains": ["execute: handler.save-files -> rt-006.md"],
+    "reportContains": [
+      "GATE: done (review not required)",
+      "| Status | COMPLETED |"
+    ],
+    "workspaceFiles": {
+      "notes.md": "# Scenario workspace notes\n\nCommitted fixture. A scenario copies this file into an isolated workspace,\nworks there, and the harness empties the workspace afterwards — the fixture\nitself is never modified.\n\n## Entries",
+      "rt-006.md": "RT-006: created by handler.save-files through the production path.\n"
+    }
+  },
+  "variants": [
+    {
+      "name": "overwrite",
+      "input": {
+        "plan": {
+          "task": "Overwrite the native-write trial file with the second revision",
+          "tier": "T2",
+          "changes": [
+            { "file": "rt-006.md", "why": "prove create-or-overwrite semantics of the single save operation" }
+          ],
+          "verification": ["read back rt-006.md and confirm the bytes were replaced, not appended"],
+          "risks": ["the overwrite must stay inside the isolated scenario workspace"]
+        },
+        "execution": {
+          "kind": "hotkey",
+          "module": "hotkeys",
+          "capability": "hotkeys:execute",
+          "phase": "RUN",
+          "target": { "key": "G" },
+          "args": {
+            "file": "rt-006.md",
+            "content": "RT-006: overwritten by handler.save-files — full replacement, never append.\n"
+          }
+        }
+      },
+      "expected": {
+        "outcome": "PASS",
+        "exitCode": 0,
+        "result": { "ok": true, "code": "COMPLETED", "status": "COMPLETED", "stage": "COMPLETE" },
+        "counts": { "planner": 1, "approval": 0, "agent": 1, "report": 1, "toolChecks": 5 },
+        "execution": {
+          "executed": true,
+          "classification": "EXECUTABLE",
+          "code": "OK_EXECUTED",
+          "outputFile": "rt-006.md"
+        },
+        "evidenceContains": ["execute: handler.save-files -> rt-006.md"],
+        "reportContains": ["| Status | COMPLETED |"],
+        "workspaceFiles": {
+          "notes.md": "# Scenario workspace notes\n\nCommitted fixture. A scenario copies this file into an isolated workspace,\nworks there, and the harness empties the workspace afterwards — the fixture\nitself is never modified.\n\n## Entries",
+          "rt-006.md": "RT-006: overwritten by handler.save-files — full replacement, never append.\n"
+        }
+      }
+    },
+    {
+      "name": "gated-without-approval",
+      "approval": "none",
+      "input": {
+        "plan": {
+          "task": "Create a gated file in the scenario workspace without approval",
+          "tier": "T2",
+          "trigger": "migration",
+          "changes": [
+            { "file": "gated.md", "why": "prove the single GATE refuses before any native write" }
+          ],
+          "verification": ["confirm gated.md does not exist after the refusal"],
+          "risks": ["an ungated write would bypass the only authorization point"]
+        },
+        "execution": {
+          "kind": "hotkey",
+          "module": "hotkeys",
+          "capability": "hotkeys:execute",
+          "phase": "RUN",
+          "target": { "key": "G" },
+          "args": {
+            "file": "gated.md",
+            "content": "RT-006: this gated write must never happen without approval.\n"
+          }
+        }
+      },
+      "expected": {
+        "outcome": "EXPECTED_REFUSAL",
+        "exitCode": 3,
+        "result": {
+          "ok": false,
+          "code": "APPROVAL_REQUIRED",
+          "status": "REFUSED",
+          "stage": "GATE"
+        },
+        "counts": { "planner": 1, "approval": 0, "agent": 0, "report": 1, "toolChecks": 1 },
+        "execution": { "executed": false },
+        "reportContains": ["GATE: refused (APPROVAL_REQUIRED)"],
+        "reportNotContains": ["| Status | COMPLETED |"],
+        "workspaceFiles": {
+          "notes.md": "# Scenario workspace notes\n\nCommitted fixture. A scenario copies this file into an isolated workspace,\nworks there, and the harness empties the workspace afterwards — the fixture\nitself is never modified.\n\n## Entries",
+          "rt-006.md": "RT-006: overwritten by handler.save-files — full replacement, never append.\n"
+        }
+      }
+    },
+    {
+      "name": "gated-approved",
+      "approval": "grant",
+      "input": {
+        "plan": {
+          "task": "Create a gated file in the scenario workspace with explicit approval",
+          "tier": "T2",
+          "trigger": "migration",
+          "changes": [
+            { "file": "gated.md", "why": "prove approval binds the write arguments and the write then executes" }
+          ],
+          "verification": ["read back gated.md and compare the reported sha256"],
+          "risks": ["the approval must be the single GATE decision, never a second check"]
+        },
+        "execution": {
+          "kind": "hotkey",
+          "module": "hotkeys",
+          "capability": "hotkeys:execute",
+          "phase": "RUN",
+          "target": { "key": "G" },
+          "args": {
+            "file": "gated.md",
+            "content": "RT-006: gated native write approved once at the GATE.\n"
+          }
+        }
+      },
+      "expected": {
+        "outcome": "PASS",
+        "exitCode": 0,
+        "result": { "ok": true, "code": "COMPLETED", "status": "COMPLETED", "stage": "COMPLETE" },
+        "counts": { "planner": 1, "approval": 1, "agent": 1, "report": 1, "toolChecks": 5 },
+        "execution": {
+          "executed": true,
+          "classification": "EXECUTABLE",
+          "code": "OK_EXECUTED",
+          "outputFile": "gated.md"
+        },
+        "evidenceContains": ["execute: handler.save-files -> gated.md"],
+        "reportContains": [
+          "GATE: done (approval verified)",
+          "| Status | COMPLETED |"
+        ],
+        "workspaceFiles": {
+          "notes.md": "# Scenario workspace notes\n\nCommitted fixture. A scenario copies this file into an isolated workspace,\nworks there, and the harness empties the workspace afterwards — the fixture\nitself is never modified.\n\n## Entries",
+          "rt-006.md": "RT-006: overwritten by handler.save-files — full replacement, never append.\n",
+          "gated.md": "RT-006: gated native write approved once at the GATE.\n"
+        }
+      }
+    }
+  ]
+}

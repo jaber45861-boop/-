@@ -52,7 +52,7 @@ import {
   createDefaultProviders,
 } from "../modules/tool-bus/src/capabilities.mjs";
 import { createRuntime } from "../modules/hotkeys/src/runtime.mjs";
-import { DEFAULT_HANDLERS, defineHandler } from "../modules/hotkeys/src/handlers.mjs";
+import { DEFAULT_HANDLERS, defineHandler, createSaveFilesHandler } from "../modules/hotkeys/src/handlers.mjs";
 import { createReportBus } from "../modules/report-bus/index.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -96,7 +96,7 @@ export const EXPECTED_OUTCOMES = Object.freeze([
 ]);
 
 const SCENARIO_FIELDS = Object.freeze([
-  "id", "name", "description", "workspace", "handler", "faults", "approval", "input", "expected", "variants",
+  "id", "name", "description", "workspace", "handler", "nativeWorkspace", "faults", "approval", "input", "expected", "variants",
 ]);
 const RUN_FIELDS = Object.freeze(["name", "approval", "faults", "input", "expected"]);
 const EXPECTED_FIELDS = Object.freeze([
@@ -156,6 +156,22 @@ export function validateScenario(scenario) {
       // A writing handler without an isolated workspace would touch the
       // repository root — refused here, before anything runs.
       v("handler \"workspace-save\" requires a declared workspace");
+    }
+  }
+  if (scenario.nativeWorkspace !== undefined) {
+    if (typeof scenario.nativeWorkspace !== "boolean") {
+      v("nativeWorkspace must be a boolean");
+    } else if (scenario.nativeWorkspace) {
+      // The native production path (25 §11): the harness acts as composition
+      // root and binds the SHIPPED handler.save-files factory to the
+      // scenario's declared workspace — never an injected scenario handler,
+      // never a repository workspace.
+      if (scenario.workspace === undefined) {
+        v("nativeWorkspace requires a declared workspace");
+      }
+      if (scenario.handler !== undefined) {
+        v("nativeWorkspace cannot be combined with an injected handler");
+      }
     }
   }
   if (scenario.faults !== undefined) {
@@ -404,7 +420,7 @@ function createWorkspaceSaveHandler(workspaceRoot) {
 }
 
 /** Build one run's dependencies: the real contracts plus counting probes. */
-function buildDependencies({ counts, handlerSpec, faultComposerReport }) {
+function buildDependencies({ counts, handlerSpec, nativeWorkspaceRoot, faultComposerReport }) {
   const realToolBus = createToolBus({
     declarationText: loadCapabilityDeclarations(),
     providers: createDefaultProviders(),
@@ -434,7 +450,15 @@ function buildDependencies({ counts, handlerSpec, faultComposerReport }) {
   const hotkeyRuntime = createRuntime({
     registryText: REGISTRY_TEXT,
     root: REPO_ROOT,
-    handlers: handlerSpec === null ? DEFAULT_HANDLERS : { ...DEFAULT_HANDLERS, ...handlerSpec },
+    handlers: nativeWorkspaceRoot !== null && nativeWorkspaceRoot !== undefined
+      // Native production path (27 §R6, 25 §11): the SHIPPED factory bound to
+      // the explicitly declared scenario workspace — no scenario-provided
+      // handler is involved, and the repository root is refused by the
+      // factory itself.
+      ? { ...DEFAULT_HANDLERS, "grimoire.key.G": createSaveFilesHandler({ workspace: nativeWorkspaceRoot, repositoryRoot: REPO_ROOT }) }
+      : handlerSpec === null
+        ? DEFAULT_HANDLERS
+        : { ...DEFAULT_HANDLERS, ...handlerSpec },
   });
   const plannerBus = createReportBus();
   const planner = {
@@ -675,6 +699,7 @@ export function runScenario(scenario) {
     const handlerSpec = scenario.handler === undefined
       ? null
       : { "grimoire.key.G": createWorkspaceSaveHandler(workspace.root).spec };
+    const nativeWorkspaceRoot = scenario.nativeWorkspace === true ? workspace.root : null;
     const runs = [
       {
         name: "primary",
@@ -697,6 +722,7 @@ export function runScenario(scenario) {
         const dependencies = buildDependencies({
           counts,
           handlerSpec,
+          nativeWorkspaceRoot,
           faultComposerReport: run.faults.includes("composer-report-bus"),
         });
         // The Task 16 runtime executes the bundle; the harness only supplies
