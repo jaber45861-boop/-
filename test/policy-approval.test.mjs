@@ -1474,6 +1474,22 @@ describe("Policy/Approval negative matrix (NEG-01 … NEG-20)", () => {
       "docs/v3/05-acceptance-tests.md",
       "test/policy-approval.test.mjs",
     ]);
+    // Task-20 boundary extension (documented, same reasoning): the Native
+    // Write Contract Authoring task is contract-only — it amends the hotkey
+    // runtime contract, documents the Local Runtime opt-in flag and the
+    // scenario-harness paths, specifies Group U, and extends this boundary
+    // line. No handler, write code, runtime option, registry entry, token,
+    // capability, RT-006, or Group U executable test is added, so this
+    // exhaustive five-file list is the entire authorized surface. Every
+    // OTHER changed path (any module, runtime, composition, handler, or
+    // test-behavior file) still fails this gate exactly as before.
+    const TASK20 = new Set([
+      "docs/v3/14-hotkey-runtime.md",
+      "docs/v3/24-local-runtime.md",
+      "docs/v3/25-real-scenario-test-harness.md",
+      "docs/v3/05-acceptance-tests.md",
+      "test/policy-approval.test.mjs",
+    ]);
     // -uall: list every untracked file individually (a plain listing would
     // collapse a brand-new directory to `runtime/` and check no file in it).
     const porcelain = execFileSync("git", ["status", "--porcelain", "-uall"], {
@@ -1486,8 +1502,8 @@ describe("Policy/Approval negative matrix (NEG-01 … NEG-20)", () => {
       .map((line) => line.replace(/^\?\? /, "   ").slice(3).trim());
     for (const file of changed) {
       assert.ok(
-        CS13.has(file) || TASK16.has(file) || TASK17.has(file) || TASK18.has(file) || TASK19.has(file),
-        `unauthorized change outside CS-13/Task-16/Task-17/Task-18/Task-19: ${file}`
+        CS13.has(file) || TASK16.has(file) || TASK17.has(file) || TASK18.has(file) || TASK19.has(file) || TASK20.has(file),
+        `unauthorized change outside CS-13/Task-16/Task-17/Task-18/Task-19/Task-20: ${file}`
       );
     }
     // Nothing registers: no manifest anywhere in the composition root.

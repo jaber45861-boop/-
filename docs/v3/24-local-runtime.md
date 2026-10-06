@@ -27,7 +27,7 @@ Both must report `0 fail`, `0 skipped`, `0 todo` and exit 0.
 ## 3. How to run the Local Runtime
 
 ```bash
-node runtime/local-runtime.mjs [--approval grant|deny] <input.json | ->
+node runtime/local-runtime.mjs [--approval grant|deny] [--workspace <dir>] <input.json | ->
 ```
 
 - `<input.json>` — path to a JSON bundle file.
@@ -35,8 +35,39 @@ node runtime/local-runtime.mjs [--approval grant|deny] <input.json | ->
   `cat test/_fixtures/composition_request.json | node runtime/local-runtime.mjs -`
 - `--approval grant|deny` — explicitly requested demo verdicts (§7).
   Omitted means no approval component exists.
+- `--workspace <dir>` — an explicitly declared, writable native-write
+  workspace directory (§3.1). **Contract-only in Task 20** — documented by
+  the Task 19 ruling (`27`) and implemented no earlier than Task 21.
 
 No interactive prompts; one command per run.
+
+### 3.1 Native write workspace contract (`--workspace`)
+
+This section documents the authorized opt-in interface only. **Task 20 is a
+contract task: no CLI implementation exists yet** — the runtime's accepted
+flags, input handling, and output are unchanged by this document, and no
+implementation task may start before the Task 20 contract lands (`27` R7).
+
+- **Default (no `--workspace`):** the Local Runtime behaves exactly as
+  Task 16 left it. `G` remains unavailable / `UNIMPLEMENTED`, the default
+  wiring stays byte-identical, and every exit code in §8 is unchanged.
+- **Opt-in (with `--workspace <dir>`):** the directory is an explicit
+  composition-root dependency. Given an explicitly valid workspace, `G`
+  **may be wired** to `handler.save-files` (`14` §6.1). The flag is the
+  caller's declaration, not a discovery mechanism: the workspace is never
+  derived from the bundle, execution args, cwd, environment, pid, clock, or
+  globals (`27` R3).
+- **The Grimoire repository root is categorically not a writable
+  native-write workspace.** A workspace that resolves to (or escapes to) the
+  repository root, an absolute path outside the declared directory, a `..`
+  traversal, or a symlink target outside the declared directory is refused
+  — at construction, not per write.
+- `--workspace` changes no exit code and adds no success path by itself:
+  binding the handler does not bypass the approval GATE (`23`), and any
+  native write failure is classified per `14` §5.1 — no write failure may
+  ever produce `COMPLETED`.
+- There is **no implicit root**: without the explicit declaration there is
+  no workspace at all, and nothing in the runtime searches for one.
 
 ## 4. How to give it input
 
@@ -146,6 +177,10 @@ successful run prints no diagnostics and no stack traces. Exit codes:
 | `3` | approval refusal (`APPROVAL_REQUIRED` — the gate stayed closed) |
 | `4` | agent refusal or failure (e.g. `EXECUTION_REFUSED`) |
 | `5` | report failure (`REPORT_FAILED` — completion is never claimed) |
+
+Task 20 changes none of these exit codes: `--workspace` (`24` §3.1) is a
+documented contract only, and a refused or failed native write maps onto the
+codes above, never onto a new exit code and never onto `0`/`COMPLETED`.
 
 No timestamps, random ids, or machine paths appear anywhere in the output:
 identical input renders byte-identically.

@@ -193,9 +193,38 @@ harness failure.
   point, bound to the ACTIVE registry record `G` ("save your files"). The
   Agent, gate, registry, and reports are real; the scenario-provided handler is
   the only scenario-specific piece. Shipping write behaviour as a Grimoire
-  module is a future Core task, not this one.
+  module is a future task (Task 21, specified by `14` §6.1 and Group U in
+  `05`), not this one; the injected leg described above stays independently
+  testable after it lands (§11).
 - RT-005's report-failure leg uses one declared harness fault
   (`faults: ["composer-report-bus"]`) to reach a state the repository cannot
   reach from real input. Every other leg runs the unmodified contracts.
 - The harness verifies behaviour and contracts. It does not verify product
   value, performance, or safety outside the repository's own scope.
+
+## 11. Future native-write coverage — two handler paths
+
+**Specified by Task 20; nothing here is implemented in Task 20.** When the
+native write capability lands (Task 21), the harness must keep two distinct,
+independently testable paths to a `G` handler:
+
+1. **Production / native capability path.** The trial uses the production
+   factory/path with an **explicitly declared workspace** — the composition
+   root's opt-in `--workspace <dir>` dependency (`24` §3.1) wired to
+   `handler.save-files` (`14` §6.1). Nothing is injected for the handler
+   itself; the handler reaches the run the same way it reaches any other
+   bound hotkey handler, through composition-root binding only. The workspace
+   follows every isolation rule in §7 — it is a fresh directory outside the
+   repository, and the repository root is categorically never a workspace.
+2. **Injected fault-injection path (unchanged).** The existing
+   `createRuntime({handlers})` seam stays exactly as it is: RT-002/RT-003/
+   RT-005 keep supplying their scenario handler through injection, with
+   unchanged behaviour and assertions. This leg exists to inject controlled
+   faults and read-only substitutes; it is not replaced or retired when the
+   native path arrives.
+
+The real native-write trial is **RT-006** — specified here and in Group U
+(`05`), **not implemented in Task 20**. Until Task 21, the harness ships no
+`RT-006.json`, no production-path handler wiring, and no Group U executable
+tests; `node test/scenario-harness.mjs --all` continues to run exactly the
+scenarios Task 17 shipped.

@@ -1513,7 +1513,7 @@ listed `detail` unless another code is named.
 | **NEG-17** agent called after refusal | Any refusal shape D0–D6 through call-recording spies | **REFUSE** | The case's exact detail | **0** | refusal report present; `orchestration: null`; never completion | R-08, R-15 |
 | **NEG-18** report after invalid gate transition | Refusal at GATE (attempted crossing without valid approval) | **REFUSE** | The case's exact detail | 0 | composer report mirrors `REFUSED` @ `GATE` with issue `APPROVAL_REQUIRED: <detail>`; approval component emits **no** report; no completion row, no success row | R-13, R-08 |
 | **NEG-19** bypass attempt around GATE | Caller appends an `approval` member to the bundle envelope (C1-style bypass) | **REFUSE** at **VALIDATE** | `INVALID_REQUEST`, E-INPUT (strict envelope — approval is never envelope data) | 0 | refusal report @ `VALIDATE`; GATE never reached; no approval evidence line | R-01, PE-06 |
-| **NEG-20** unauthorized change outside CS-13 | Repository diff vs protected pins (Core `01`–`04`/`12`, planner, agent, manifests, runtime), vs CS-13's exhaustive file list, and vs the Task-16 through Task-19 boundary lists (each extended by its own directive: Task 16 = `runtime/local-runtime.mjs`, `test/local-runtime.test.mjs`, `docs/v3/24-local-runtime.md`, `test/_fixtures/local_runtime_gated.json`; Task 17 = `test/scenario-harness.mjs`, `test/scenario-harness.test.mjs`, `test/scenarios/RT-001…RT-005.json`, `test/scenarios/fixtures/notes.md`, `docs/v3/25-real-scenario-test-harness.md`; Task 18 = `docs/v3/26-native-write-capability.md`, `test/policy-approval.test.mjs`; Task 19 = `docs/v3/27-native-write-capability-ruling.md`, `docs/v3/26-native-write-capability.md`, `docs/v3/05-acceptance-tests.md`, `test/policy-approval.test.mjs`) | **PASS** iff changed files ⊆ CS-13 ∪ Task-16 ∪ Task-17 ∪ Task-18 ∪ Task-19 lists; else test failure | none in runtime; assertion names the unauthorized file | 0 (static check — no `execute()`) | no report emitted (static/pin test, HKC-17 pattern) | R-09 scans + release gate |
+| **NEG-20** unauthorized change outside CS-13 | Repository diff vs protected pins (Core `01`–`04`/`12`, planner, agent, manifests, runtime), vs CS-13's exhaustive file list, and vs the Task-16 through Task-20 boundary lists (each extended by its own directive: Task 16 = `runtime/local-runtime.mjs`, `test/local-runtime.test.mjs`, `docs/v3/24-local-runtime.md`, `test/_fixtures/local_runtime_gated.json`; Task 17 = `test/scenario-harness.mjs`, `test/scenario-harness.test.mjs`, `test/scenarios/RT-001…RT-005.json`, `test/scenarios/fixtures/notes.md`, `docs/v3/25-real-scenario-test-harness.md`; Task 18 = `docs/v3/26-native-write-capability.md`, `test/policy-approval.test.mjs`; Task 19 = `docs/v3/27-native-write-capability-ruling.md`, `docs/v3/26-native-write-capability.md`, `docs/v3/05-acceptance-tests.md`, `test/policy-approval.test.mjs`; Task 20 = `docs/v3/14-hotkey-runtime.md`, `docs/v3/24-local-runtime.md`, `docs/v3/25-real-scenario-test-harness.md`, `docs/v3/05-acceptance-tests.md`, `test/policy-approval.test.mjs`) | **PASS** iff changed files ⊆ CS-13 ∪ Task-16 ∪ Task-17 ∪ Task-18 ∪ Task-19 ∪ Task-20 lists; else test failure | none in runtime; assertion names the unauthorized file | 0 (static check — no `execute()`) | no report emitted (static/pin test, HKC-17 pattern) | R-09 scans + release gate |
 
 **R-M mutation fixtures (specification — land atomically with CS-13; each
 asserted byte-different from pristine `composition_request.json` before use;
@@ -1801,4 +1801,131 @@ and byte-identical output across repeated runs; full suite
 failures, 0 skipped, exit 0; Groups A–S untouched (PE-05, PE-21, M4, Groups
 Q/R/S green); Core `01`–`04`, `12`, `22`, `23` and `runtime/local-runtime.mjs`
 byte-unchanged; NEG-20's boundary extended by the nine-file Task-17 list only
+(documented in its row above and in the test itself).
+
+---
+
+## Group U — Native Write Capability (added Task 20; contracts: `14` §5.1/§6.1/§7.1, `24` §3.1, `25` §11; ruling: `27`)
+
+**Status: SPECIFIED — NOT IMPLEMENTED.** Group U is the authoritative future
+acceptance group for the native write capability authorized by the Task 19
+ruling (`27`). Task 20 is contract-only: it specifies these cases and adds no
+executable tests; the implementation task lands them. Every item derives
+directly from ruling R1–R7. Until then the suite count is unchanged (**291
+tests, 49 suites**), no `U-*` test file and no `RT-006.json` exist, and no
+existing group may be weakened to make room for them.
+
+**U-01 Native G identity and handler binding [S/R]**
+*Scenario:* Resolve `G` twice: once with no declared workspace, once with a
+composition-root-declared workspace.
+*Pass criteria:* no workspace ⇒ `G` remains `UNIMPLEMENTED` with byte-identical
+default wiring (HKR-01 split unchanged, HKR-04 list unchanged, `12` pinned,
+`capabilities.json` byte-identical); declared workspace ⇒ `G` runs
+`handler.save-files` through the declared tool `files` (required — NOT
+repurposed, no new Tool Bus capability token, no new 12 token; availability
+versioned via the hotkeys manifest semver). The handler is hotkey-module L2
+code — NOT a Tool Bus provider, NOT a new module, NOT a `grimoire.adapter.*`,
+NOT runtime-global filesystem behavior — and it never bypasses the GATE.
+
+**U-02 Single-file UTF-8 create [R]**
+*Scenario:* Call the single operation `save` with exactly `{file, content}`
+naming a missing target whose parent exists, inside the declared workspace.
+*Pass criteria:* exactly one UTF-8 text file created containing exactly the
+given bytes; result `COMPLETED`; exactly one operation exists — `save` — with
+no other exposed operation.
+
+**U-03 Existing-file overwrite [R]**
+*Scenario:* `save` against an existing workspace file with new content.
+*Pass criteria:* the file becomes exactly the new bytes (full overwrite — not
+append, not merge); every other workspace file stays byte-identical; missing
+target = create success, existing target = overwrite success.
+
+**U-04 Append rejected [R]**
+*Scenario:* Any append/extend request, or any argument shape other than
+exactly `{file, content}` (extra/missing args, `append: true`, second file).
+*Pass criteria:* refusal at input — `E_INPUT_INVALID_ARGS` / E-INPUT — with no
+bytes written; no append operation exists anywhere in the contract (excluded
+by R2).
+
+**U-05 Directory creation rejected [R]**
+*Scenario:* `save` whose target resolves to a directory, or any mkdir-shaped
+request.
+*Pass criteria:* refused — directory/permission/filesystem-I/O conditions
+classify `EXECUTION_ERROR` / E-TOOL → EXECUTION_FAILED (`14` §5.1) — no
+directory created, nothing written, never COMPLETED.
+
+**U-06 Missing parent rejected [R]**
+*Scenario:* `save` naming a file whose parent directory does not exist.
+*Pass criteria:* `E_ENV_MISSING_FILE` / E-ENV → EXECUTION_FAILED; no directory
+is created to make the write succeed; a missing *target* (with an existing
+parent) still succeeds as create (U-02); never COMPLETED.
+
+**U-07 Workspace containment [R]**
+*Scenario:* Paths inside the declared workspace, paths that resolve outside
+it, and runs with no workspace declared at all.
+*Pass criteria:* the workspace is an explicit composition-root dependency
+(constructor/flag data) — never from execution args, bundle, cwd, environment,
+pid, clock, or globals, and never discovered implicitly; real-path
+containment of the parent is enforced (absolute, `..`, and symlink escapes
+refused); the Grimoire repository root is categorically refused as a
+workspace; no workspace ⇒ handler not bound ⇒ `G` stays `UNIMPLEMENTED`.
+
+**U-08 Absolute path rejection [R]**
+*Scenario:* `file` beginning with `/`, or any drive/colon, backslash, NUL, or
+newline form.
+*Pass criteria:* `E_INPUT_INVALID_ARGS` / E-INPUT before any I/O; no file
+created or overwritten.
+
+**U-09 Traversal rejection [R]**
+*Scenario:* `file` containing `.` or `..` segments, empty segments, or a
+trailing `/`.
+*Pass criteria:* `E_INPUT_INVALID_ARGS` / E-INPUT; nothing written — the path
+does not resolve, so it never reaches the filesystem.
+
+**U-10 Symlink escape rejection [R]**
+*Scenario:* A workspace-relative path whose real path (through a symlink)
+resolves outside the declared workspace.
+*Pass criteria:* refused at containment (real-path check on the parent); no
+byte lands outside the workspace; the repository remains untouched.
+
+**U-11 Approval / GATE integration [R]**
+*Scenario:* A gated plan whose execution sub-request targets `G`/`save`:
+without approval, with a mismatched verdict, with plan-only binding, and with
+a correct verdict — plus a write attempt with no declared workspace.
+*Pass criteria:* the existing single GATE stays the sole authorization point;
+review comes from the plan (`review.required`), never from the capability;
+approval binds the plan AND the complete execution sub-request INCLUDING the
+write arguments (`executionIdentity(bundle.execution)`); exactly one
+`verify()` per gated attempt; no second authorization check exists anywhere;
+the write implementation performs zero authorization (containment ≠
+approval); every refusal ⇒ never COMPLETED.
+
+**U-12 Failure classification and non-COMPLETED behavior [R]**
+*Scenario:* Each R4 condition — malformed/invalid path or content, missing
+parent, permission/filesystem-I/O/directory failure, handler unavailable,
+required tool unavailable, unexpected exception, native write tool operation
+failure.
+*Pass criteria:* respectively `E_INPUT_INVALID_ARGS`/E-INPUT;
+`E_ENV_MISSING_FILE`/E-ENV → EXECUTION_FAILED; `EXECUTION_ERROR`/E-TOOL;
+`E_ENV_HANDLER_MISSING`; `E_TOOL_UNAVAILABLE` → TOOL_REQUIRED;
+`E_UNKNOWN_EXCEPTION`; `E_TOOL_WRITE_FAILED`/E-TOOL — the ONLY new code, no
+`E_WRITE_*` family anywhere. **No write failure may ever produce COMPLETED**,
+and report/completion semantics are unchanged from Groups A–T.
+
+**RT-006 — the real native-write trial [R] (specified, not implemented):**
+`test/scenarios/RT-006.json` runs the production/native capability path — the
+production factory with an explicitly declared workspace (`24` §3.1) wired to
+`handler.save-files` — with NO injected handler for the trial leg, while the
+existing `createRuntime({handlers})` injection seam stays intact and the
+RT-002/RT-003/RT-005 behavior stays unchanged and independently testable
+(`25` §11). RT-006 lands with the implementation (Task 21), not with this
+specification.
+
+**Group U release gate (Task 20 — specification only):**
+
+Full suite `node --test test/*.test.mjs` = **291 (Groups A–T)**, 49 suites,
+0 failures, 0 skipped, exit 0; zero executable Group U or RT-006 tests added;
+Groups A–T untouched; Core `01`–`04`, `12`, `22`, `23`,
+`runtime/local-runtime.mjs`, and `modules/tool-bus/capabilities.json`
+byte-unchanged; NEG-20's boundary extended by the five-file Task-20 list only
 (documented in its row above and in the test itself).
