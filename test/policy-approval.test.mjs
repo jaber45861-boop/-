@@ -1425,13 +1425,31 @@ describe("Policy/Approval negative matrix (NEG-01 … NEG-20)", () => {
       "test/_fixtures/mut_approval_execution_swapped.json",
       "test/_fixtures/mut_approval_report_input.json",
     ]);
-    const porcelain = execFileSync("git", ["status", "--porcelain"], { cwd: ROOT, encoding: "utf8" });
+    // Task-16 boundary extension (documented): the Local Runtime work is
+    // authorized by the Task 16 directive, not by CS-13, so its exhaustive
+    // four-file list joins the boundary below. Every OTHER changed path
+    // still fails this gate exactly as before.
+    const TASK16 = new Set([
+      "runtime/local-runtime.mjs",
+      "test/local-runtime.test.mjs",
+      "docs/v3/24-local-runtime.md",
+      "test/_fixtures/local_runtime_gated.json",
+    ]);
+    // -uall: list every untracked file individually (a plain listing would
+    // collapse a brand-new directory to `runtime/` and check no file in it).
+    const porcelain = execFileSync("git", ["status", "--porcelain", "-uall"], {
+      cwd: ROOT,
+      encoding: "utf8",
+    });
     const changed = porcelain
       .split("\n")
       .filter((line) => line.trim() !== "")
       .map((line) => line.replace(/^\?\? /, "   ").slice(3).trim());
     for (const file of changed) {
-      assert.ok(CS13.has(file), `unauthorized change outside CS-13: ${file}`);
+      assert.ok(
+        CS13.has(file) || TASK16.has(file),
+        `unauthorized change outside CS-13/Task-16: ${file}`
+      );
     }
     // Nothing registers: no manifest anywhere in the composition root.
     assert.ok(!existsSync(path.join(COMPOSITION_DIR, "manifest.yaml")));

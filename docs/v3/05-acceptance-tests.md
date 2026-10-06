@@ -1513,7 +1513,7 @@ listed `detail` unless another code is named.
 | **NEG-17** agent called after refusal | Any refusal shape D0–D6 through call-recording spies | **REFUSE** | The case's exact detail | **0** | refusal report present; `orchestration: null`; never completion | R-08, R-15 |
 | **NEG-18** report after invalid gate transition | Refusal at GATE (attempted crossing without valid approval) | **REFUSE** | The case's exact detail | 0 | composer report mirrors `REFUSED` @ `GATE` with issue `APPROVAL_REQUIRED: <detail>`; approval component emits **no** report; no completion row, no success row | R-13, R-08 |
 | **NEG-19** bypass attempt around GATE | Caller appends an `approval` member to the bundle envelope (C1-style bypass) | **REFUSE** at **VALIDATE** | `INVALID_REQUEST`, E-INPUT (strict envelope — approval is never envelope data) | 0 | refusal report @ `VALIDATE`; GATE never reached; no approval evidence line | R-01, PE-06 |
-| **NEG-20** unauthorized change outside CS-13 | Repository diff vs protected pins (Core `01`–`04`/`12`, planner, agent, manifests, runtime) and vs CS-13's exhaustive file list | **PASS** iff changed files ⊆ CS-13; else test failure | none in runtime; assertion names the unauthorized file | 0 (static check — no `execute()`) | no report emitted (static/pin test, HKC-17 pattern) | R-09 scans + release gate |
+| **NEG-20** unauthorized change outside CS-13 | Repository diff vs protected pins (Core `01`–`04`/`12`, planner, agent, manifests, runtime), vs CS-13's exhaustive file list, and vs the Task-16 boundary list (extended with the Task 16 directive: `runtime/local-runtime.mjs`, `test/local-runtime.test.mjs`, `docs/v3/24-local-runtime.md`, `test/_fixtures/local_runtime_gated.json`) | **PASS** iff changed files ⊆ CS-13 ∪ Task-16 list; else test failure | none in runtime; assertion names the unauthorized file | 0 (static check — no `execute()`) | no report emitted (static/pin test, HKC-17 pattern) | R-09 scans + release gate |
 
 **R-M mutation fixtures (specification — land atomically with CS-13; each
 asserted byte-different from pristine `composition_request.json` before use;
@@ -1541,3 +1541,132 @@ skipped. The earlier staging-only "no commit or push" note recorded for Tasks
 14/14R is superseded by the explicit Task 15 executive directive, which
 authorizes committing and pushing this change-set only after every gate above
 passes.
+
+---
+
+## Group S — Local Runtime Integration Tests (added Task 16; contract: `24-local-runtime.md`)
+
+**Status: EXECUTABLE — landed with the Local Runtime.** The Local Runtime
+(`runtime/local-runtime.mjs`) is a thin orchestration shell that CONSUMES the
+existing contracts — Planner, Plan–Execution Composition, the `23` approval
+GATE, Agent Orchestrator, Tool Bus, Hotkey Runtime, Report Bus — and
+redefines none of them (no second gate, no new contract, no server/UI/
+database/package manager). The executable file `test/local-runtime.test.mjs`
+names the ten mandated scenarios **I-01…I-10** (10 tests, 1 suite), so the
+suite is Groups A–R's **269** plus Group S's **10** = **279 tests, 45
+suites, 0 failures, 0 skipped** (`node --test test/*.test.mjs`). Every
+scenario wires the runtime's own `createLocalDependencies()` — the real
+Planner, Agent Orchestrator, Module Registry, Tool Bus, Hotkey Runtime, and
+Report Bus, exactly what the CLI uses; only counting probes and the
+explicitly controlled faults deviate. Approval components are always
+explicitly injected (`23` §2) — the runtime never supplies one on its own.
+
+**I-01 Ungated successful execution**
+*Scenario:* The pristine ungated bundle (`test/_fixtures/composition_request.json`)
+through the real wiring, with a counting approval component injected but a
+plan that does not require review.
+*Pass criteria:* `ok:true`, `COMPLETED` @ `COMPLETE`, `error:null`; counts
+`planner 1 / agent 1 / composer reportBus.build 1 / approval.verify 0`;
+three hash-valid reports (planner, agent, composer); composer report shows
+`| Status | COMPLETED |` and ledger `GATE: done (review not required)`;
+`execution.executed === true`; printed header parses with matching
+`reportSha256`; exit code 0. *Test:* `I-01`.
+
+**I-02 Review required without an approval component**
+*Scenario:* The gated bundle (`test/_fixtures/local_runtime_gated.json`,
+`plan.trigger: "migration"`) through the runtime with NO approval option —
+the runtime must not create one (23 §2/§6 D0).
+*Pass criteria:* `APPROVAL_REQUIRED`/`REFUSED` @ `GATE`, E-INPUT, detail
+exactly `plan review is required before execution (migration) — the approval
+gate belongs to the policy/approval contract`; counts `planner 1 / verify 0
+/ agent 0 / build 1`; `planning` present, `orchestration: null`; refusal
+report present, never `| Status | COMPLETED |`, no `approval.verify`
+evidence line; exit code 3. *Test:* `I-02`.
+
+**I-03 Review required with valid approval**
+*Scenario:* The gated bundle with an explicitly injected counting component
+returning `{granted: true, plan: <planIdentity>, execution:
+<executionIdentity>}` computed from its actual arguments.
+*Pass criteria:* `ok:true`, `COMPLETED` @ `COMPLETE`; counts `planner 1 /
+verify 1 / agent 1 / build 1`; ledger `GATE: done (approval verified)`;
+evidence `approval.verify(...) → affirmative` then `approval.binding →
+verified`; `execution.executed === true`; exit code 0. *Test:* `I-03`.
+
+**I-04 Wrong plan binding**
+*Scenario:* Gated bundle; the verdict's `plan` digest (`"a"` × 64) does not
+match the plan.
+*Pass criteria:* `APPROVAL_REQUIRED`/`REFUSED` @ `GATE`, detail exactly
+`approval verdict binding mismatch` (D3); counts `verify 1 / agent 0`;
+`orchestration: null`; refusal report never completion; exit code 3. *Test:* `I-04`.
+
+**I-05 Wrong execution binding**
+*Scenario:* Gated bundle; the verdict's `execution` digest (`"b"` × 64) does
+not match the execution sub-request.
+*Pass criteria:* `APPROVAL_REQUIRED`/`REFUSED` @ `GATE`, detail exactly
+`approval verdict binding mismatch` (D3); counts `verify 1 / agent 0`;
+refusal report never completion; exit code 3. *Test:* `I-05`.
+
+**I-06 Invalid verdict**
+*Scenario:* Gated bundle; the injected component returns, in turn: a verdict
+missing the `execution` binding; a verdict whose `granted` is the string
+`"true"`; and a well-formed but non-affirmative `granted:false` verdict.
+*Pass criteria:* every case fails closed: `APPROVAL_REQUIRED`/`REFUSED` @
+`GATE`, counts `verify 1 / agent 0`, `orchestration: null`, refusal report
+never completion; details exactly `approval verdict malformed` (D1) for the
+first two and `approval verdict not affirmative` (D2) for the third; exit
+code 3. *Test:* `I-06`.
+
+**I-07 Agent failure propagates — never a silent success**
+*Scenario:* Ungated bundle whose execution targets an unknown hotkey key
+(`target.key: "GHOST"`) — a real refusal through the real registry/runtime.
+*Pass criteria:* `EXECUTION_REFUSED`/`REFUSED` @ `ORCHESTRATE` with the
+runtime's own class and detail containing `E_INPUT_UNKNOWN_KEY`; counts
+`planner 1 / agent 1 / build 1`; the downstream attempt is consumed
+verbatim (`execution.executed === false`, agent report hash-valid); composer
+report hash-valid with ledger `ORCHESTRATE: refused (EXECUTION_REFUSED)` and
+never `| Status | COMPLETED |` nor the success row; exit code 4. *Test:* `I-07`.
+
+**I-08 Report failure propagates — no fabricated completion**
+*Scenario:* Real planner and agent with an injected failing composer report
+bus (controlled fault) on an otherwise successful bundle.
+*Pass criteria:* `REPORT_FAILED`/`REPORT_FAILED` @ `REPORT`, `report ===
+null`, error detail preserving `attempt COMPLETED`; counts `agent 1 /
+build 1`; the underlying orchestration is preserved (`orchestration !==
+null`); printed header carries `reportSha256: null` with no report text and
+never `| Status | COMPLETED |`; exit code 5. *Test:* `I-08`.
+
+**I-09 Repeated execution — determinism and statelessness**
+*Scenario:* The same input run twice on fresh wirings; then grant → deny →
+grant on ONE wiring; then the real CLI process twice on the same file; plus
+a source scan of the runtime file.
+*Pass criteria:* `deepStrictEqual` results and byte-identical printed output
+across runs with per-run counts `plan 1 / run 1 / build 1`; the denied run
+refuses immediately after the granted run (no cached verdict) with counts
+`plan 3 / verify 3 / run 2 / build 3` after the three gated runs; the two
+granted reports share the same bytes and `sha256`; both CLI runs exit 0 with
+identical stdout and empty stderr; runtime source contains none of
+`Math.random`, `process.env`, `process.pid`, `Date.now`, `new Date`,
+`globalThis`, `setTimeout`, `node:crypto`. *Test:* `I-09`.
+
+**I-10 Full local trial — the real CLI process**
+*Scenario:* Spawn `node runtime/local-runtime.mjs` with: the ungated fixture
+file; the gated fixture file with and without `--approval grant`; a denied
+gated bundle on stdin; an invalid bundle; plus in-process usage and
+unparseable-input paths.
+*Pass criteria:* file run exits 0 with `ok:true`/`COMPLETED`, empty stderr,
+`reportSha256` matching the printed report bytes, and all seven ledger lines
+(RECEIVE → VALIDATE → PLAN → GATE → ORCHESTRATE → REPORT → COMPLETE);
+gated fixture without the flag exits 3 (D0 detail); with `--approval grant`
+exits 0 with `GATE: done (approval verified)`; stdin + `--approval deny`
+exits 3 (`approval verdict not affirmative`); invalid bundle exits 2 with
+`INVALID_REQUEST` @ `VALIDATE`; usage error and unparseable JSON exit 2
+with `INPUT ERROR` on stderr and nothing on stdout. *Test:* `I-10`.
+
+**Group S release gate (Task 16):**
+
+`test/local-runtime.test.mjs` green (10/10); full suite
+`node --test test/*.test.mjs` = **279 (269 + Group S 10)**, 45 suites, 0
+failures, 0 skipped, exit 0; Groups A–R untouched (PE-05, PE-21, M4, and
+Group R all still green); Core `01`–`04` and `12` byte-unchanged; NEG-20's
+boundary extended by the four-file Task-16 list only (documented in its row
+above and in the test itself).
