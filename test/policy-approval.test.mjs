@@ -1517,6 +1517,17 @@ describe("Policy/Approval negative matrix (NEG-01 … NEG-20)", () => {
       "docs/v3/24-local-runtime.md",
       "docs/v3/25-real-scenario-test-harness.md",
     ]);
+    // Task-22 boundary extension (documented, same reasoning): the Native
+    // Write Security & Integrity Audit is audit-only — it ships ONE audit
+    // record document plus this boundary line. No production code, test
+    // behavior, contract text, or protected file is added, changed, or
+    // weakened, so this exhaustive two-file list is the entire authorized
+    // surface. Every OTHER changed path still fails this gate exactly as
+    // before.
+    const TASK22 = new Set([
+      "docs/v3/28-native-write-audit.md",
+      "test/policy-approval.test.mjs",
+    ]);
     // -uall: list every untracked file individually (a plain listing would
     // collapse a brand-new directory to `runtime/` and check no file in it).
     const porcelain = execFileSync("git", ["status", "--porcelain", "-uall"], {
@@ -1529,8 +1540,8 @@ describe("Policy/Approval negative matrix (NEG-01 … NEG-20)", () => {
       .map((line) => line.replace(/^\?\? /, "   ").slice(3).trim());
     for (const file of changed) {
       assert.ok(
-        CS13.has(file) || TASK16.has(file) || TASK17.has(file) || TASK18.has(file) || TASK19.has(file) || TASK20.has(file) || TASK21.has(file),
-        `unauthorized change outside CS-13/Task-16/Task-17/Task-18/Task-19/Task-20/Task-21: ${file}`
+        CS13.has(file) || TASK16.has(file) || TASK17.has(file) || TASK18.has(file) || TASK19.has(file) || TASK20.has(file) || TASK21.has(file) || TASK22.has(file),
+        `unauthorized change outside CS-13/Task-16/Task-17/Task-18/Task-19/Task-20/Task-21/Task-22: ${file}`
       );
     }
     // Nothing registers: no manifest anywhere in the composition root.
