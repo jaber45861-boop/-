@@ -1,0 +1,97 @@
+{
+  "id": "RT-003",
+  "name": "Development change that requires review",
+  "description": "The same workspace change as RT-002, but the plan carries trigger \"migration\", so review.required is true. The primary run injects no approval at all and must be refused at the GATE with zero agent calls; the second run supplies an explicitly authorized approval and the same change then executes. No approval is hidden, cached, or self-issued.",
+  "workspace": { "files": ["notes.md"] },
+  "handler": "workspace-save",
+  "approval": "none",
+  "input": {
+    "plan": {
+      "task": "Append the migration entry to the scenario workspace notes",
+      "tier": "T2",
+      "trigger": "migration",
+      "changes": [
+        { "file": "notes.md", "why": "record one workspace entry for the migration change" }
+      ],
+      "verification": ["read back notes.md and compare the reported sha256"],
+      "risks": ["a review-gated change must not run before the gate opens"]
+    },
+    "execution": {
+      "kind": "hotkey",
+      "module": "hotkeys",
+      "capability": "hotkeys:execute",
+      "phase": "RUN",
+      "target": { "key": "G" },
+      "args": {
+        "file": "notes.md",
+        "entry": "- RT-003: record the workspace entry for the review-gated change"
+      }
+    }
+  },
+  "expected": {
+    "outcome": "EXPECTED_REFUSAL",
+    "exitCode": 3,
+    "result": {
+      "ok": false,
+      "code": "APPROVAL_REQUIRED",
+      "status": "REFUSED",
+      "stage": "GATE"
+    },
+    "counts": { "planner": 1, "approval": 0, "agent": 0, "report": 1, "toolChecks": 1 },
+    "execution": { "executed": false, "classification": null, "outputFile": null },
+    "reportContains": ["GATE: refused (APPROVAL_REQUIRED)"],
+    "reportNotContains": ["| Status | COMPLETED |"],
+    "workspaceFiles": {
+      "notes.md": "# Scenario workspace notes\n\nCommitted fixture. A scenario copies this file into an isolated workspace,\nworks there, and the harness empties the workspace afterwards — the fixture\nitself is never modified.\n\n## Entries"
+    }
+  },
+  "variants": [
+    {
+      "name": "approved",
+      "approval": "grant",
+      "input": {
+        "plan": {
+          "task": "Append the migration entry to the scenario workspace notes",
+          "tier": "T2",
+          "trigger": "migration",
+          "changes": [
+            { "file": "notes.md", "why": "record one workspace entry for the migration change" }
+          ],
+          "verification": ["read back notes.md and compare the reported sha256"],
+          "risks": ["a review-gated change must not run before the gate opens"]
+        },
+        "execution": {
+          "kind": "hotkey",
+          "module": "hotkeys",
+          "capability": "hotkeys:execute",
+          "phase": "RUN",
+          "target": { "key": "G" },
+          "args": {
+            "file": "notes.md",
+            "entry": "- RT-003: record the workspace entry for the review-gated change"
+          }
+        }
+      },
+      "expected": {
+        "outcome": "PASS",
+        "exitCode": 0,
+        "result": { "ok": true, "code": "COMPLETED", "status": "COMPLETED", "stage": "COMPLETE" },
+        "counts": { "planner": 1, "approval": 1, "agent": 1, "report": 1, "toolChecks": 5 },
+        "execution": {
+          "executed": true,
+          "classification": "EXECUTABLE",
+          "code": "OK_EXECUTED",
+          "outputFile": "notes.md"
+        },
+        "evidenceContains": ["execute: scenario.workspace-save -> notes.md"],
+        "reportContains": [
+          "GATE: done (approval verified)",
+          "| Status | COMPLETED |"
+        ],
+        "workspaceFiles": {
+          "notes.md": "# Scenario workspace notes\n\nCommitted fixture. A scenario copies this file into an isolated workspace,\nworks there, and the harness empties the workspace afterwards — the fixture\nitself is never modified.\n\n## Entries\n- RT-003: record the workspace entry for the review-gated change\n"
+        }
+      }
+    }
+  ]
+}

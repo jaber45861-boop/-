@@ -1,0 +1,50 @@
+{
+  "id": "RT-002",
+  "name": "Small safe development change in an isolated workspace",
+  "description": "A T2 change request appends exactly one line to a workspace note. The change is executed through the ACTIVE registry record G (12 §2 row 17), whose behaviour this scenario supplies through the documented createRuntime({handlers}) injection point — the real Agent still resolves, gates, executes, and reports it. The harness asserts the resulting file content and execution fingerprint, then restores the workspace.",
+  "workspace": { "files": ["notes.md"] },
+  "handler": "workspace-save",
+  "approval": "none",
+  "input": {
+    "plan": {
+      "task": "Append the release-checklist owner to the scenario workspace notes",
+      "tier": "T2",
+      "changes": [
+        { "file": "notes.md", "why": "record one workspace entry for the release checklist" }
+      ],
+      "verification": ["read back notes.md and compare the reported sha256"],
+      "risks": ["the change must stay inside the isolated scenario workspace"]
+    },
+    "execution": {
+      "kind": "hotkey",
+      "module": "hotkeys",
+      "capability": "hotkeys:execute",
+      "phase": "RUN",
+      "target": { "key": "G" },
+      "args": {
+        "file": "notes.md",
+        "entry": "- RT-002: record the workspace entry for the release checklist"
+      }
+    }
+  },
+  "expected": {
+    "outcome": "PASS",
+    "exitCode": 0,
+    "result": { "ok": true, "code": "COMPLETED", "status": "COMPLETED", "stage": "COMPLETE" },
+    "counts": { "planner": 1, "approval": 0, "agent": 1, "report": 1, "toolChecks": 5 },
+    "execution": {
+      "executed": true,
+      "classification": "EXECUTABLE",
+      "code": "OK_EXECUTED",
+      "outputFile": "notes.md"
+    },
+    "evidenceContains": ["execute: scenario.workspace-save -> notes.md"],
+    "reportContains": [
+      "GATE: done (review not required)",
+      "| Status | COMPLETED |"
+    ],
+    "workspaceFiles": {
+      "notes.md": "# Scenario workspace notes\n\nCommitted fixture. A scenario copies this file into an isolated workspace,\nworks there, and the harness empties the workspace afterwards — the fixture\nitself is never modified.\n\n## Entries\n- RT-002: record the workspace entry for the release checklist\n"
+    }
+  }
+}

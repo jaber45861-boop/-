@@ -1,0 +1,45 @@
+{
+  "id": "RT-001",
+  "name": "Read-only repository inspection",
+  "description": "A plain T2 inspection request runs the shipped R hotkey against the repository root: the real Planner, the real Agent, the real Module Registry, Tool Bus, Hotkey Runtime, and Report Bus all participate, nothing is written, and no review gate applies.",
+  "approval": "none",
+  "input": {
+    "plan": {
+      "task": "Verify the repository readme is reachable through the R hotkey",
+      "tier": "T2",
+      "changes": [
+        { "file": "Readme.md", "why": "confirm the readme document opens and is fingerprinted" }
+      ],
+      "verification": ["node runtime/local-runtime.mjs test/_fixtures/composition_request.json"],
+      "risks": ["a read-only inspection cannot change repository state"]
+    },
+    "execution": {
+      "kind": "hotkey",
+      "module": "hotkeys",
+      "capability": "hotkeys:execute",
+      "phase": "RUN",
+      "target": { "key": "R" }
+    }
+  },
+  "expected": {
+    "outcome": "PASS",
+    "exitCode": 0,
+    "result": { "ok": true, "code": "COMPLETED", "status": "COMPLETED", "stage": "COMPLETE" },
+    "counts": { "planner": 1, "approval": 0, "agent": 1, "report": 1, "toolChecks": 5 },
+    "execution": {
+      "executed": true,
+      "classification": "EXECUTABLE",
+      "code": "OK_EXECUTED",
+      "outputFile": "Readme.md"
+    },
+    "evidenceContains": [
+      "registry: docs/v3/12-hotkey-registry.md sha256",
+      "execute: handler.readme -> Readme.md"
+    ],
+    "reportContains": [
+      "GATE: done (review not required)",
+      "ORCHESTRATE: done (agent → COMPLETED)",
+      "| Status | COMPLETED |"
+    ]
+  }
+}

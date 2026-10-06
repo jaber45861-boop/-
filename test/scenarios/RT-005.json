@@ -1,0 +1,98 @@
+{
+  "id": "RT-005",
+  "name": "Controlled failure — no false success",
+  "description": "Two controlled failures the system already defines. First, the scenario handler reads a workspace file that does not exist: the Hotkey Runtime classifies the thrown error as EXECUTION_ERROR and the Agent reports EXECUTION_FAILED, and the workspace stays untouched (no half-written file). Second, an explicitly declared harness fault makes the composer's report bus refuse: the run becomes REPORT_FAILED with no report artifact at all. Both must stay non-success.",
+  "workspace": { "files": ["notes.md"] },
+  "handler": "workspace-save",
+  "approval": "none",
+  "input": {
+    "plan": {
+      "task": "Save a workspace note that does not exist",
+      "tier": "T2",
+      "changes": [
+        { "file": "notes.md", "why": "attempt a save against a missing workspace file" }
+      ],
+      "verification": ["read back the workspace and confirm nothing was written"],
+      "risks": ["a failed execution must never be reported as a success"]
+    },
+    "execution": {
+      "kind": "hotkey",
+      "module": "hotkeys",
+      "capability": "hotkeys:execute",
+      "phase": "RUN",
+      "target": { "key": "G" },
+      "args": {
+        "file": "missing.md",
+        "entry": "- RT-005: this entry must never be written"
+      }
+    }
+  },
+  "expected": {
+    "outcome": "EXPECTED_FAILURE",
+    "exitCode": 4,
+    "result": {
+      "ok": false,
+      "code": "EXECUTION_FAILED",
+      "status": "FAILED",
+      "stage": "ORCHESTRATE"
+    },
+    "counts": { "planner": 1, "approval": 0, "agent": 1, "report": 1, "toolChecks": 5 },
+    "execution": {
+      "executed": false,
+      "classification": "EXECUTION_ERROR",
+      "code": "E_ENV_MISSING_FILE"
+    },
+    "reportContains": ["ORCHESTRATE: failed (EXECUTION_FAILED)"],
+    "reportNotContains": [
+      "| Status | COMPLETED |",
+      "plan-execution | plan-execution.execute | success"
+    ],
+    "workspaceFiles": {
+      "notes.md": "# Scenario workspace notes\n\nCommitted fixture. A scenario copies this file into an isolated workspace,\nworks there, and the harness empties the workspace afterwards — the fixture\nitself is never modified.\n\n## Entries"
+    }
+  },
+  "variants": [
+    {
+      "name": "report-failure",
+      "faults": ["composer-report-bus"],
+      "input": {
+        "plan": {
+          "task": "Append an entry while the report step refuses",
+          "tier": "T2",
+          "changes": [
+            { "file": "notes.md", "why": "exercise the report gate after a successful execution" }
+          ],
+          "verification": ["confirm the run is REPORT_FAILED and carries no report"],
+          "risks": ["an unusable report must never become a completion claim"]
+        },
+        "execution": {
+          "kind": "hotkey",
+          "module": "hotkeys",
+          "capability": "hotkeys:execute",
+          "phase": "RUN",
+          "target": { "key": "G" },
+          "args": {
+            "file": "notes.md",
+            "entry": "- RT-005: report step refuses, the change still happened"
+          }
+        }
+      },
+      "expected": {
+        "outcome": "EXPECTED_FAILURE",
+        "exitCode": 5,
+        "result": {
+          "ok": false,
+          "code": "REPORT_FAILED",
+          "status": "REPORT_FAILED",
+          "stage": "REPORT"
+        },
+        "counts": { "planner": 1, "approval": 0, "agent": 1, "report": 1, "toolChecks": 5 },
+        "execution": { "executed": true, "classification": "EXECUTABLE", "code": "OK_EXECUTED" },
+        "reportNotContains": ["| Status | COMPLETED |"],
+        "workspaceFiles": {
+          "notes.md": "# Scenario workspace notes\n\nCommitted fixture. A scenario copies this file into an isolated workspace,\nworks there, and the harness empties the workspace afterwards — the fixture\nitself is never modified.\n\n## Entries\n- RT-005: report step refuses, the change still happened\n"
+        }
+      }
+    }
+  ]
+}

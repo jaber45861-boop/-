@@ -1513,7 +1513,7 @@ listed `detail` unless another code is named.
 | **NEG-17** agent called after refusal | Any refusal shape D0–D6 through call-recording spies | **REFUSE** | The case's exact detail | **0** | refusal report present; `orchestration: null`; never completion | R-08, R-15 |
 | **NEG-18** report after invalid gate transition | Refusal at GATE (attempted crossing without valid approval) | **REFUSE** | The case's exact detail | 0 | composer report mirrors `REFUSED` @ `GATE` with issue `APPROVAL_REQUIRED: <detail>`; approval component emits **no** report; no completion row, no success row | R-13, R-08 |
 | **NEG-19** bypass attempt around GATE | Caller appends an `approval` member to the bundle envelope (C1-style bypass) | **REFUSE** at **VALIDATE** | `INVALID_REQUEST`, E-INPUT (strict envelope — approval is never envelope data) | 0 | refusal report @ `VALIDATE`; GATE never reached; no approval evidence line | R-01, PE-06 |
-| **NEG-20** unauthorized change outside CS-13 | Repository diff vs protected pins (Core `01`–`04`/`12`, planner, agent, manifests, runtime), vs CS-13's exhaustive file list, and vs the Task-16 boundary list (extended with the Task 16 directive: `runtime/local-runtime.mjs`, `test/local-runtime.test.mjs`, `docs/v3/24-local-runtime.md`, `test/_fixtures/local_runtime_gated.json`) | **PASS** iff changed files ⊆ CS-13 ∪ Task-16 list; else test failure | none in runtime; assertion names the unauthorized file | 0 (static check — no `execute()`) | no report emitted (static/pin test, HKC-17 pattern) | R-09 scans + release gate |
+| **NEG-20** unauthorized change outside CS-13 | Repository diff vs protected pins (Core `01`–`04`/`12`, planner, agent, manifests, runtime), vs CS-13's exhaustive file list, and vs the Task-16 and Task-17 boundary lists (each extended by its own directive: Task 16 = `runtime/local-runtime.mjs`, `test/local-runtime.test.mjs`, `docs/v3/24-local-runtime.md`, `test/_fixtures/local_runtime_gated.json`; Task 17 = `test/scenario-harness.mjs`, `test/scenario-harness.test.mjs`, `test/scenarios/RT-001…RT-005.json`, `test/scenarios/fixtures/notes.md`, `docs/v3/25-real-scenario-test-harness.md`) | **PASS** iff changed files ⊆ CS-13 ∪ Task-16 ∪ Task-17 lists; else test failure | none in runtime; assertion names the unauthorized file | 0 (static check — no `execute()`) | no report emitted (static/pin test, HKC-17 pattern) | R-09 scans + release gate |
 
 **R-M mutation fixtures (specification — land atomically with CS-13; each
 asserted byte-different from pristine `composition_request.json` before use;
@@ -1670,3 +1670,135 @@ failures, 0 skipped, exit 0; Groups A–R untouched (PE-05, PE-21, M4, and
 Group R all still green); Core `01`–`04` and `12` byte-unchanged; NEG-20's
 boundary extended by the four-file Task-16 list only (documented in its row
 above and in the test itself).
+
+---
+
+## Group T — Real Scenario Test Harness Tests (added Task 17; contract: `25-real-scenario-test-harness.md`)
+
+**Status: EXECUTABLE — landed with the Real Scenario Test Harness.** The
+harness (`test/scenario-harness.mjs`) sits ON TOP OF the Task 16 Local Runtime
+and the contracts it consumes. It only DEFINES, RUNS, OBSERVES, ASSERTS, and
+REPORTS: it never plans, never self-approves, never invokes a tool outside the
+Agent, never edits an Agent result, and never converts a failure into a pass.
+Every scenario runs the real Planner, Plan–Execution Composition, approval
+GATE, Agent Orchestrator, Module Registry, Tool Bus, Hotkey Runtime, and Report
+Bus. The executable file `test/scenario-harness.test.mjs` names **T-01…T-12**
+(12 tests, 4 suites), so the suite is Groups A–S's **279** plus Group T's
+**12** = **291 tests, 49 suites, 0 failures, 0 skipped**
+(`node --test test/*.test.mjs`). Scenario definitions live in
+`test/scenarios/RT-001…RT-005.json` with a committed fixture in
+`test/scenarios/fixtures/notes.md`; the CLI is
+`node test/scenario-harness.mjs <RT-xxx>` / `--all` (exit 0 all pass, 2 usage,
+3 scenario failed, 4 harness failure).
+
+**T-01 Scenario loading**
+*Scenario:* Load every definition through `loadScenarios()` / `loadScenario()`.
+*Pass criteria:* exactly five definitions, ids `RT-001…RT-005` in order and
+unique; each validates clean and declares `id`, `name`, `description`, `input`,
+`expected`, a real task, and an explicit execution target; an unknown id throws
+`E_UNKNOWN_SCENARIO`. *Test:* `T-01`.
+
+**T-02 Validation fails closed**
+*Scenario:* Eighteen malformed definitions (bad id, empty name, unknown
+scenario/expected/result/counts fields, non-integer exit code, unknown
+approval/fault/handler, a writing handler without a workspace, an escaping
+workspace path, an empty file list, a nameless variant, a non-object).
+*Pass criteria:* each produces at least one named violation matching its
+pattern; each such definition is REPORTED as `HARNESS_FAILURE` / `FAIL` with
+zero runs executed — never a partial run and never a pass; the outcome
+vocabulary is exactly the seven declared values. *Test:* `T-02`.
+
+**T-03 Single scenario execution**
+*Scenario:* Run RT-001 through `runScenario()`.
+*Pass criteria:* `STATUS PASS`, `OUTCOME PASS`, one run, no failed assertions,
+at least 15 assertions; result `COMPLETED` @ `COMPLETE`, exit code 0, a
+64-character report fingerprint, and execution evidence naming
+`handler.readme -> Readme.md`. *Test:* `T-03`.
+
+**T-04 All scenarios execution and CLI**
+*Scenario:* `runAll()`, then `main(["--all"])`, `main(["RT-003"])`,
+`main([])`, `main(["--all","RT-001"])`.
+*Pass criteria:* five results in id order, all `PASS`, one
+`SUMMARY scenarios=5 passed=5 failed=0 harnessFailures=0` line; `--all` exits
+0 with empty stderr; missing/contradictory arguments exit 2 with the usage
+line. *Test:* `T-04`.
+
+**T-05 Deterministic repeat**
+*Scenario:* Run every scenario twice in one process and compare.
+*Pass criteria:* `deepStrictEqual` observations across both rounds; rendered
+report byte-identical; every run's assertions stay green; a report fingerprint
+exists exactly when the result is not `REPORT_FAILED`. *Test:* `T-05`.
+
+**T-06 Isolated workspace**
+*Scenario:* `createWorkspace()` / `observeWorkspace()` / `disposeWorkspace()`
+for a workspace scenario, plus a missing-fixture definition.
+*Pass criteria:* the workspace root lies OUTSIDE the repository and holds an
+exact byte copy of the committed fixture; it is removed entirely on dispose and
+observes as empty afterwards; the fixture's sha256 is unchanged; a missing
+fixture throws `E_HARNESS_FIXTURE` rather than yielding an empty workspace; no
+workspace directory is ever created inside the repository. *Test:* `T-06`.
+
+**T-07 The real path**
+*Scenario:* Inspect RT-001 and RT-002 observations.
+*Pass criteria:* metrics exactly `planner 1 / approval 0 / agent 1 / report 1 /
+toolChecks 5` with at least one Tool Bus consultation; evidence carries the
+registry fingerprint and `execute: handler.readme -> Readme.md`; the report
+carries `planner.plan(...) → COMPLETED`, `agent.run(...) → COMPLETED` and the
+five Report Bus sections; the workspace change is observable inside the
+workspace, its reported `outputSha256` equals the file's real sha256, and no
+file appeared in the repository root. *Test:* `T-07`.
+
+**T-08 Approval-required scenario**
+*Scenario:* RT-003 — the same gated change without and with approval.
+*Pass criteria:* primary run `APPROVAL_REQUIRED` @ `GATE`, counts
+`planner 1 / approval 0 / agent 0 / report 1 / toolChecks 1`, exit code 3, and
+a workspace byte-identical to the fixture; the `approved` run counts
+`planner 1 / approval 1 / agent 1 / report 1 / toolChecks 5`, completes with
+exit 0, reports `GATE: done (approval verified)`, and shows the appended entry —
+one consultation per gated attempt, never two, never zero. *Test:* `T-08`.
+
+**T-09 Expected refusal**
+*Scenario:* RT-004 (unknown key, then the conflicted record K) plus the
+taxonomy mapping functions.
+*Pass criteria:* both runs classify `EXPECTED_REFUSAL` with the scenario still
+`PASS`; runtime codes `E_INPUT_UNKNOWN_KEY` and `E_CONFLICT_BLOCKED_CONFLICT`;
+`agent 1` in each, exit 4, and neither report contains the completion status or
+the success row; `resolveOutcome`/`classifyOutcome` map success-where-refusal-
+expected to `UNEXPECTED_SUCCESS`, refusal-where-success-expected to
+`AGENT_FAILURE`, and mismatches to `CONTRACT_FAILURE`. *Test:* `T-09`.
+
+**T-10 Expected failure**
+*Scenario:* RT-005 — a handler that reads a missing workspace file, then a
+declared `composer-report-bus` fault.
+*Pass criteria:* handler failure ⇒ `EXECUTION_FAILED` / `FAILED` /
+`E_ENV_MISSING_FILE` with the workspace byte-identical to the fixture (no
+half-written file); report failure ⇒ `REPORT_FAILED` @ `REPORT` with
+`reportSha256 === null` and no report text, even though the execution itself
+executed (`execution.executed === true`), exit 5. *Test:* `T-10`.
+
+**T-11 Protected-file safety**
+*Scenario:* sha256 of Core `01`–`04`/`12`, `22`, `23`, and
+`runtime/local-runtime.mjs` around `runAll()`, plus an escaping-path scenario.
+*Pass criteria:* every fingerprint identical before and after; the escaping
+path (`../notes.md`) never executes, writes nothing into `test/scenarios/` or
+the repository root, and leaves the real workspace intact. *Test:* `T-11`.
+
+**T-12 No false success**
+*Scenario:* Five deliberate mutations — success where a refusal was expected, a
+wrong declared result code, an Agent refusal where success was expected, a
+missing fixture, and an invalid id — run directly and through the CLI.
+*Pass criteria:* respectively `UNEXPECTED_SUCCESS`, `CONTRACT_FAILURE`,
+`AGENT_FAILURE`, `HARNESS_FAILURE`, `HARNESS_FAILURE`, each with
+`STATUS FAIL`; CLI exits 0 for the honest scenario, 3 for a failed scenario and
+4 for a harness failure. No mutation may ever read as `PASS`. *Test:* `T-12`.
+
+**Group T release gate (Task 17):**
+
+`test/scenario-harness.test.mjs` green (12/12); `node test/scenario-harness.mjs
+--all` exits 0 with `SUMMARY scenarios=5 passed=5 failed=0 harnessFailures=0`
+and byte-identical output across repeated runs; full suite
+`node --test test/*.test.mjs` = **291 (279 + Group T 12)**, 49 suites, 0
+failures, 0 skipped, exit 0; Groups A–S untouched (PE-05, PE-21, M4, Groups
+Q/R/S green); Core `01`–`04`, `12`, `22`, `23` and `runtime/local-runtime.mjs`
+byte-unchanged; NEG-20's boundary extended by the nine-file Task-17 list only
+(documented in its row above and in the test itself).

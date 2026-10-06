@@ -1,0 +1,85 @@
+{
+  "id": "RT-004",
+  "name": "Deliberate refusal — the Agent refuses safely",
+  "description": "Two requests the current contracts must refuse: an unknown hotkey key (the runtime refuses at resolve) and the ambiguous/conflicted registry record K (the activation gate refuses it before dispatch). A correct refusal is a PASS for this scenario: the harness classifies it EXPECTED_REFUSAL and still asserts that no success is ever claimed.",
+  "approval": "none",
+  "input": {
+    "plan": {
+      "task": "Inspect a hotkey that is not part of the registry",
+      "tier": "T2",
+      "changes": [
+        { "file": "docs/v3/12-hotkey-registry.md", "why": "confirm an unregistered key cannot be dispatched" }
+      ],
+      "verification": ["node test/scenario-harness.mjs RT-004"],
+      "risks": ["a refused execution must never be reported as a success"]
+    },
+    "execution": {
+      "kind": "hotkey",
+      "module": "hotkeys",
+      "capability": "hotkeys:execute",
+      "phase": "RUN",
+      "target": { "key": "ZZ" }
+    }
+  },
+  "expected": {
+    "outcome": "EXPECTED_REFUSAL",
+    "exitCode": 4,
+    "result": {
+      "ok": false,
+      "code": "EXECUTION_REFUSED",
+      "status": "REFUSED",
+      "stage": "ORCHESTRATE"
+    },
+    "counts": { "planner": 1, "approval": 0, "agent": 1, "report": 1, "toolChecks": 5 },
+    "execution": { "executed": false, "classification": "REFUSED", "code": "E_INPUT_UNKNOWN_KEY" },
+    "reportContains": ["ORCHESTRATE: refused (EXECUTION_REFUSED)"],
+    "reportNotContains": [
+      "| Status | COMPLETED |",
+      "plan-execution | plan-execution.execute | success"
+    ]
+  },
+  "variants": [
+    {
+      "name": "activation-gate",
+      "input": {
+        "plan": {
+          "task": "Inspect the conflicted registry record K",
+          "tier": "T2",
+          "changes": [
+            { "file": "docs/v3/12-hotkey-registry.md", "why": "confirm a conflicted record is refused by the activation gate" }
+          ],
+          "verification": ["node test/scenario-harness.mjs RT-004"],
+          "risks": ["a blocked record must never reach a handler"]
+        },
+        "execution": {
+          "kind": "hotkey",
+          "module": "hotkeys",
+          "capability": "hotkeys:execute",
+          "phase": "RUN",
+          "target": { "key": "K" }
+        }
+      },
+      "expected": {
+        "outcome": "EXPECTED_REFUSAL",
+        "exitCode": 4,
+        "result": {
+          "ok": false,
+          "code": "EXECUTION_REFUSED",
+          "status": "REFUSED",
+          "stage": "ORCHESTRATE"
+        },
+        "counts": { "planner": 1, "approval": 0, "agent": 1, "report": 1, "toolChecks": 5 },
+        "execution": {
+          "executed": false,
+          "classification": "REFUSED",
+          "code": "E_CONFLICT_BLOCKED_CONFLICT"
+        },
+        "reportContains": ["ORCHESTRATE: refused (EXECUTION_REFUSED)"],
+        "reportNotContains": [
+          "| Status | COMPLETED |",
+          "plan-execution | plan-execution.execute | success"
+        ]
+      }
+    }
+  ]
+}

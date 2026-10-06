@@ -1435,6 +1435,21 @@ describe("Policy/Approval negative matrix (NEG-01 … NEG-20)", () => {
       "docs/v3/24-local-runtime.md",
       "test/_fixtures/local_runtime_gated.json",
     ]);
+    // Task-17 boundary extension (documented, same reasoning): the Real
+    // Scenario Test Harness is authorized by the Task 17 directive; its
+    // exhaustive nine-file list joins the boundary. No Core file, module,
+    // contract, or Local Runtime file is added here.
+    const TASK17 = new Set([
+      "test/scenario-harness.mjs",
+      "test/scenario-harness.test.mjs",
+      "test/scenarios/RT-001.json",
+      "test/scenarios/RT-002.json",
+      "test/scenarios/RT-003.json",
+      "test/scenarios/RT-004.json",
+      "test/scenarios/RT-005.json",
+      "test/scenarios/fixtures/notes.md",
+      "docs/v3/25-real-scenario-test-harness.md",
+    ]);
     // -uall: list every untracked file individually (a plain listing would
     // collapse a brand-new directory to `runtime/` and check no file in it).
     const porcelain = execFileSync("git", ["status", "--porcelain", "-uall"], {
@@ -1447,8 +1462,8 @@ describe("Policy/Approval negative matrix (NEG-01 … NEG-20)", () => {
       .map((line) => line.replace(/^\?\? /, "   ").slice(3).trim());
     for (const file of changed) {
       assert.ok(
-        CS13.has(file) || TASK16.has(file),
-        `unauthorized change outside CS-13/Task-16: ${file}`
+        CS13.has(file) || TASK16.has(file) || TASK17.has(file),
+        `unauthorized change outside CS-13/Task-16/Task-17: ${file}`
       );
     }
     // Nothing registers: no manifest anywhere in the composition root.
