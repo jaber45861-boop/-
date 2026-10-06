@@ -739,9 +739,13 @@ Must not change: `docs/v3/01`–`04`, `12`, `22`, `23` (pins), `docs/v3/15`, `16
 ## Git Evidence
 
 ```text
-HEAD:     1eb918ca0c91911953d1b075c29ecb28660c94c6  (Task 18, before Task 19 edits)
-Commit:   see below (Task 19 commit, message "docs(v3): rule native write capability")
-Remote:   https://github.com/jaber45861-boop/-  main  (verified equal to HEAD after push)
+HEAD:     1eb918ca0c91911953d1b075c29ecb28660c94c6  (Task 18, state before Task 19 edits)
+Commit:   Task 19 commit subject "docs(v3): rule native write capability" (first commit
+          932471cc222503dd4c4fefde06d9a3c1864d412f, plus this evidence-only follow-up);
+          the final HEAD sha is reported in the Task 19 final report — a file cannot
+          contain its own commit hash, so no later sha is embedded here
+Remote:   https://github.com/jaber45861-boop/-  main  (git ls-remote HEAD == local HEAD
+          after push)
 Worktree: clean after commit (git status --porcelain empty)
 Baseline: node --test test/*.test.mjs → 291 tests · 49 suites · 291 pass · 0 fail ·
           0 skipped · 0 todo, exit 0 (before and after this task)
