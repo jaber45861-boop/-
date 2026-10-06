@@ -1461,6 +1461,19 @@ describe("Policy/Approval negative matrix (NEG-01 … NEG-20)", () => {
       "docs/v3/26-native-write-capability.md",
       "test/policy-approval.test.mjs",
     ]);
+    // Task-19 boundary extension (documented, same reasoning): the Executive
+    // Ruling on the Native Write Capability is decision-only — it ships ONE
+    // ruling document plus the two pointer/boundary edits that name it. No
+    // capability, handler, provider, token, runtime option, RT-006, or Group U
+    // is added, so this exhaustive four-file list is the entire authorized
+    // surface. Every OTHER changed path (any module, runtime, composition, or
+    // test-behavior file) still fails this gate exactly as before.
+    const TASK19 = new Set([
+      "docs/v3/27-native-write-capability-ruling.md",
+      "docs/v3/26-native-write-capability.md",
+      "docs/v3/05-acceptance-tests.md",
+      "test/policy-approval.test.mjs",
+    ]);
     // -uall: list every untracked file individually (a plain listing would
     // collapse a brand-new directory to `runtime/` and check no file in it).
     const porcelain = execFileSync("git", ["status", "--porcelain", "-uall"], {
@@ -1473,8 +1486,8 @@ describe("Policy/Approval negative matrix (NEG-01 … NEG-20)", () => {
       .map((line) => line.replace(/^\?\? /, "   ").slice(3).trim());
     for (const file of changed) {
       assert.ok(
-        CS13.has(file) || TASK16.has(file) || TASK17.has(file) || TASK18.has(file),
-        `unauthorized change outside CS-13/Task-16/Task-17/Task-18: ${file}`
+        CS13.has(file) || TASK16.has(file) || TASK17.has(file) || TASK18.has(file) || TASK19.has(file),
+        `unauthorized change outside CS-13/Task-16/Task-17/Task-18/Task-19: ${file}`
       );
     }
     // Nothing registers: no manifest anywhere in the composition root.

@@ -313,6 +313,14 @@ as the acceptance set for a future authorized implementation:
 
 ## 15. Open Decisions (REQUIRED_DECISIONS)
 
+> **Resolved.** Every decision below (`R1`–`R7`) was ruled by the Task 19 executive
+> ruling: `docs/v3/27-native-write-capability-ruling.md` (Decision Summary + `R1`–`R7`;
+> 18-`R1` → ruling `R7`, 18-`R2` → `R1`, 18-`R3` → `R3`, 18-`R4` → `R5`, 18-`R5` → `R2`,
+> 18-`R6` → `R7`, 18-`R7` → `R4`). The table is retained as the Task 18 investigation
+> record of what was open at that time; **the ruling is authoritative**. As of Task 19:
+> `IMPLEMENTATION_AUTHORIZED = NO` until the contract amendments named in the ruling's
+> Implementation Gate land.
+
 | Id | Decision that must be recorded by an authorized owner before any implementation |
 |---|---|
 | `R1` | Reconcile `14` §5 ("add a documented handler in a future task") with `14` §9 (naming `G` as invention) — either ruling must be written into the contract, not inferred. |
