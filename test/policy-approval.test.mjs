@@ -1581,6 +1581,20 @@ describe("Policy/Approval negative matrix (NEG-01 … NEG-20)", () => {
       "docs/v3/34-plan-execution-mapping-discovery.md",
       "test/policy-approval.test.mjs",
     ]);
+    // Task-29 boundary extension (documented, same reasoning): the Formal
+    // Plan -> Execution Mapping Contract / Executive Ruling is
+    // contract-authoring / executive-ruling / investigation only. It ships
+    // ONE contract/authority ruling document plus this boundary line. It
+    // does not implement, contract, or reopen any capability, handler,
+    // operation kind, Tool Bus provider, module, manifest, runtime,
+    // composition, approval implementation, Native Write, protected Core,
+    // test behavior, or scenario, so this exhaustive two-file list is the
+    // entire authorized surface. Every OTHER changed path still fails this
+    // gate exactly as before.
+    const TASK29 = new Set([
+      "docs/v3/35-plan-execution-mapping-contract.md",
+      "test/policy-approval.test.mjs",
+    ]);
     // -uall: list every untracked file individually (a plain listing would
     // collapse a brand-new directory to `runtime/` and check no file in it).
     const porcelain = execFileSync("git", ["status", "--porcelain", "-uall"], {
@@ -1593,8 +1607,8 @@ describe("Policy/Approval negative matrix (NEG-01 … NEG-20)", () => {
       .map((line) => line.replace(/^\?\? /, "   ").slice(3).trim());
     for (const file of changed) {
       assert.ok(
-        CS13.has(file) || TASK16.has(file) || TASK17.has(file) || TASK18.has(file) || TASK19.has(file) || TASK20.has(file) || TASK21.has(file) || TASK22.has(file) || TASK23.has(file) || TASK24.has(file) || TASK25.has(file) || TASK28.has(file),
-      `unauthorized change outside CS-13/Task-16/Task-17/Task-18/Task-19/Task-20/Task-21/Task-22/Task-23/Task-24/Task-25/Task-28: ${file}`
+        CS13.has(file) || TASK16.has(file) || TASK17.has(file) || TASK18.has(file) || TASK19.has(file) || TASK20.has(file) || TASK21.has(file) || TASK22.has(file) || TASK23.has(file) || TASK24.has(file) || TASK25.has(file) || TASK28.has(file) || TASK29.has(file),
+      `unauthorized change outside CS-13/Task-16/Task-17/Task-18/Task-19/Task-20/Task-21/Task-22/Task-23/Task-24/Task-25/Task-28/Task-29: ${file}`
       );
     }
     // Nothing registers: no manifest anywhere in the composition root.
