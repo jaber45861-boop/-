@@ -1595,6 +1595,27 @@ describe("Policy/Approval negative matrix (NEG-01 … NEG-20)", () => {
       "docs/v3/35-plan-execution-mapping-contract.md",
       "test/policy-approval.test.mjs",
     ]);
+    // Phase-1 (build-agent directive) boundary extension, same reasoning
+    // as Task-16…Task-29: the Intent Adapter work is authorized by the
+    // Phase-1 directive, not by CS-13, so its exhaustive thirteen-file
+    // list joins the boundary below (nine of them genuinely new paths;
+    // the four shared files are already members above). Every OTHER
+    // changed path still fails this gate exactly as before.
+    const PHASE1 = new Set([
+      "docs/v3/36-intent-adapter.md",
+      "docs/v3/05-acceptance-tests.md",
+      "docs/v3/24-local-runtime.md",
+      "modules/intent-adapter/manifest.yaml",
+      "modules/intent-adapter/index.mjs",
+      "modules/intent-adapter/src/adapter.mjs",
+      "modules/intent-adapter/src/providers.mjs",
+      "runtime/local-runtime.mjs",
+      "test/intent-adapter.test.mjs",
+      "test/policy-approval.test.mjs",
+      "test/_fixtures/intent_valid.json",
+      "test/_fixtures/intent_command_injection.json",
+      "test/_fixtures/intent_path_escape.json",
+    ]);
     // -uall: list every untracked file individually (a plain listing would
     // collapse a brand-new directory to `runtime/` and check no file in it).
     const porcelain = execFileSync("git", ["status", "--porcelain", "-uall"], {
@@ -1607,8 +1628,8 @@ describe("Policy/Approval negative matrix (NEG-01 … NEG-20)", () => {
       .map((line) => line.replace(/^\?\? /, "   ").slice(3).trim());
     for (const file of changed) {
       assert.ok(
-        CS13.has(file) || TASK16.has(file) || TASK17.has(file) || TASK18.has(file) || TASK19.has(file) || TASK20.has(file) || TASK21.has(file) || TASK22.has(file) || TASK23.has(file) || TASK24.has(file) || TASK25.has(file) || TASK28.has(file) || TASK29.has(file),
-      `unauthorized change outside CS-13/Task-16/Task-17/Task-18/Task-19/Task-20/Task-21/Task-22/Task-23/Task-24/Task-25/Task-28/Task-29: ${file}`
+        CS13.has(file) || TASK16.has(file) || TASK17.has(file) || TASK18.has(file) || TASK19.has(file) || TASK20.has(file) || TASK21.has(file) || TASK22.has(file) || TASK23.has(file) || TASK24.has(file) || TASK25.has(file) || TASK28.has(file) || TASK29.has(file) || PHASE1.has(file),
+      `unauthorized change outside CS-13/Task-16/Task-17/Task-18/Task-19/Task-20/Task-21/Task-22/Task-23/Task-24/Task-25/Task-28/Task-29/Phase-1: ${file}`
       );
     }
     // Nothing registers: no manifest anywhere in the composition root.

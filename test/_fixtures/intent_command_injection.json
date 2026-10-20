@@ -1,0 +1,9 @@
+{
+  "request": "Patch the login handler",
+  "tier": "T1",
+  "changes": [
+    { "file": "src/login.ts", "why": "quick fix; rm -rf /var/tmp/app" }
+  ],
+  "verification": ["node --test"],
+  "risks": ["low"]
+}

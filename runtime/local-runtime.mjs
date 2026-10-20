@@ -32,6 +32,23 @@
 //
 // CLI (plain Node ESM — no package.json, framework, or server):
 //   node runtime/local-runtime.mjs [--approval grant|deny] [--workspace <dir>] <input.json | ->
+//   node runtime/local-runtime.mjs --intent <intent.json | ->
+//
+// `--intent` (Phase 1, build-agent directive; docs/v3/36-intent-adapter.md)
+// is the INTENT-TO-PLAN path — deliberately planning-only:
+//
+//   intent JSON → intent-adapter (E1/PR1/C1/P1 rules) → Planner contract
+//   validator (R1, injected) → planner.plan(request) → printed plan result
+//
+// It composes NO execution: no composer.execute, no GATE consult, no
+// approval, no agent, no tool bus, no workspace, no write. User-facing
+// intent is separated from the execution decision exactly the way the
+// build-agent directive requires. The provider is the DISCLOSED
+// deterministic demo provider (amendment 2: no network, no keys, no env,
+// no hidden fallback) injected by this root — the module has no default.
+// `--intent` is mutually exclusive with `--approval` and `--workspace`.
+// The pre-existing bundle path above is byte-compatible: unchanged input
+// semantics, unchanged output format, unchanged exit codes.
 //
 // `--workspace <dir>` (Task 21, 24 §3.1) is the EXPLICIT composition-root
 // declaration of a writable native-write workspace: only with it is
@@ -68,6 +85,11 @@ import {
 import { createRuntime } from "../modules/hotkeys/src/runtime.mjs";
 import { DEFAULT_HANDLERS, createSaveFilesHandler } from "../modules/hotkeys/src/handlers.mjs";
 import { createReportBus } from "../modules/report-bus/index.mjs";
+import {
+  createIntentAdapter,
+  DEMO_INTENT_PROVIDER,
+} from "../modules/intent-adapter/index.mjs";
+import { validatePlanRequest } from "../modules/planner/index.mjs";
 
 /** The repository root this runtime is checked into (never a cwd lookup). */
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -77,7 +99,8 @@ const MODULE_IDS = Object.freeze(["hotkeys", "tool-bus", "module-registry", "rep
 const ENABLED_IDS = Object.freeze(["hotkeys"]);
 
 const USAGE =
-  'usage: node runtime/local-runtime.mjs [--approval grant|deny] [--workspace <dir>] <input.json | ->';
+  'usage: node runtime/local-runtime.mjs [--approval grant|deny] [--workspace <dir>] <input.json | ->\n' +
+  '       node runtime/local-runtime.mjs --intent <intent.json | ->';
 
 /**
  * Disclosed demo verdicts — TEST DOUBLES, usable only when explicitly
@@ -231,6 +254,73 @@ export function presentResult(result) {
   return `${JSON.stringify(header)}\n${reportText}`;
 }
 
+/**
+ * Run one user intent through the INTENT-TO-PLAN path (Phase 1):
+ * adapter (injected demo provider + Planner's own contract validator) →
+ * planner.plan(request). It NEVER reaches the composer, the GATE, the
+ * approval component, the agent, or any tool — planning is separated from
+ * the execution decision by construction, not by convention.
+ *
+ * Returns the planner's frozen result on success (ok/code/status/stage/
+ * error/request/plan/report), or a frozen refusal with the same shape and
+ * stage "ADAPT" when the adapter refuses. No writes, no side effects.
+ */
+export function runIntentPath(intent, options = {}) {
+  const adapter = createIntentAdapter({
+    provider: options.provider ?? DEMO_INTENT_PROVIDER,
+    validateRequest: validatePlanRequest,
+  });
+  const proposal = adapter.propose(intent);
+  if (!proposal.ok) {
+    return Object.freeze({
+      ok: false,
+      code: proposal.code,
+      status: "REFUSED",
+      stage: "ADAPT",
+      error: proposal.error,
+      request: null,
+      plan: null,
+      report: null,
+    });
+  }
+  const planner = options.planner ?? createPlanner({ reportBus: createReportBus() });
+  return planner.plan(proposal.request);
+}
+
+/**
+ * Deterministic stdout for the intent path: ONE single-line JSON header,
+ * then the Report Bus text verbatim. Header carries the mode tag, the
+ * proposed request (frozen — the same object the Planner received), and
+ * the report hash. No timestamps, no random ids, no machine paths.
+ */
+export function presentIntentResult(result) {
+  const header = {
+    ok: result.ok,
+    mode: "intent",
+    code: result.code,
+    status: result.status,
+    stage: result.stage,
+    error: result.error,
+    planRequest: result.request,
+    reportSha256: result.report === null ? null : result.report.sha256,
+  };
+  const reportText = result.report === null ? "" : result.report.text;
+  return `${JSON.stringify(header)}\n${reportText}`;
+}
+
+/** Intent-path exit codes (mirrors the bundle semantics per code class). */
+export const INTENT_EXIT_CODES = Object.freeze({
+  COMPLETED: 0,
+  PLAN_INCOMPLETE: 1,
+  INVALID_REQUEST: 2,
+  REPORT_FAILED: 5,
+});
+
+export function intentExitCodeFor(result) {
+  const code = result && typeof result.code === "string" ? result.code : null;
+  return Object.prototype.hasOwnProperty.call(INTENT_EXIT_CODES, code) ? INTENT_EXIT_CODES[code] : 1;
+}
+
 /** Meaningful process status: COMPLETED → 0; every non-success → 2–5 (or 1). */
 export const EXIT_CODES = Object.freeze({
   COMPLETED: 0,
@@ -274,9 +364,13 @@ export function main(argv, io = {}) {
   let inputPath = null;
   let approvalMode = null;
   let workspaceFlag = null;
+  let intentMode = false;
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
-    if (arg === "--approval") {
+    if (arg === "--intent") {
+      if (intentMode) return usageError("--intent given more than once");
+      intentMode = true;
+    } else if (arg === "--approval") {
       if (approvalMode !== null) return usageError("--approval given more than once");
       const value = argv[index + 1];
       if (value !== "grant" && value !== "deny") {
@@ -304,6 +398,12 @@ export function main(argv, io = {}) {
   }
   if (inputPath === null) return usageError("missing input (a JSON bundle file, or - for stdin)");
 
+  // --intent is planning-only: it composes no execution, so bundle-mode
+  // options that select execution behavior are rejected together.
+  if (intentMode && (approvalMode !== null || workspaceFlag !== null)) {
+    return usageError("--intent cannot be combined with --approval or --workspace (planning-only path)");
+  }
+
   // An explicit workspace is validated as INPUT before anything runs
   // (invalid input → exit 2; no implicit workspace ever exists).
   let workspaceDir = null;
@@ -323,6 +423,11 @@ export function main(argv, io = {}) {
   }
 
   try {
+    if (intentMode) {
+      const result = runIntentPath(bundle);
+      out(presentIntentResult(result));
+      return intentExitCodeFor(result);
+    }
     const options = {};
     if (approvalMode !== null) options.approval = DEMO_APPROVAL[approvalMode];
     if (workspaceDir !== null) options.workspace = workspaceDir;

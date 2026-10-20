@@ -28,6 +28,7 @@ Both must report `0 fail`, `0 skipped`, `0 todo` and exit 0.
 
 ```bash
 node runtime/local-runtime.mjs [--approval grant|deny] [--workspace <dir>] <input.json | ->
+node runtime/local-runtime.mjs --intent <intent.json | ->
 ```
 
 - `<input.json>` — path to a JSON bundle file.
@@ -40,6 +41,9 @@ node runtime/local-runtime.mjs [--approval grant|deny] [--workspace <dir>] <inpu
   ruling (`27`): with the flag the composition root binds
   `handler.save-files` to `G`; without it nothing is bound and the default
   behavior is byte-identical to Task 16.
+- `--intent` — the **planning-only intent path** (§3.2, Phase 1): text
+  intent → Intent Adapter → Planner → printed plan. It composes no
+  execution and cannot be combined with `--approval` or `--workspace`.
 
 No interactive prompts; one command per run.
 
@@ -71,6 +75,39 @@ runtime's default flags, input handling, and output remain unchanged.
   ever produce `COMPLETED`.
 - There is **no implicit root**: without the explicit declaration there is
   no workspace at all, and nothing in the runtime searches for one.
+
+### 3.2 Intent planning path (`--intent`)
+
+**Phase 1 (build-agent directive) — implemented with this phase;** full
+contract in `36-intent-adapter.md`.
+
+```bash
+node runtime/local-runtime.mjs --intent test/_fixtures/intent_valid.json
+```
+
+- **Input:** one JSON intent envelope with exactly the fields
+  `request, tier, changes, verification, risks, trigger` (`request` is
+  required; the rest follow the same rules as a Planner request).
+- **Flow:** envelope check (E1) → injected provider → provider-result
+  check (PR1) → command-formulation policy (C1) → path policy (P1) → the
+  Planner's own contract validator (R1) → `planner.plan(request)` →
+  printed plan report. Nothing else runs: **no composer, no GATE, no
+  approval component, no agent, no tool bus, no workspace, no write.**
+- **Provider:** the disclosed deterministic demo provider is the default
+  for this path (no network, no keys, no environment, no hidden
+  fallback). A real model provider later plugs into the same injected
+  interface.
+- **Output:** line 1 = one JSON header (`ok, mode:"intent", code, status,
+  stage, error, planRequest, reportSha256`), then the Plan report text
+  verbatim. Deterministic: same intent ⇒ byte-identical output.
+- **Exit codes:** `0` plan produced · `1` plan incomplete (planner
+  refusal) · `2` intent/provider/path/command refusal or usage error
+  (`INPUT ERROR:` on stderr) · `5` report failure. The bundle path's
+  exit codes (§8) are unchanged.
+- The execution decision stays on the bundle path: a gated plan is
+  still planned here, but reaching `GATE/ORCHESTRATE` requires an
+  explicit bundle with an execution sub-request — `--intent` refuses any
+  combination with `--approval` or `--workspace`.
 
 ## 4. How to give it input
 

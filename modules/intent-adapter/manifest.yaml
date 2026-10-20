@@ -1,0 +1,21 @@
+# Grimoire v3 — Intent Adapter (L2) module manifest
+# Schema: docs/v3/03-extension-contract.md §2 (field set is normative; no fields beyond it).
+id: "intent-adapter"
+version: "1.0.0"
+core: ">=3.0 <4.0"
+name: "Intent Adapter"
+purpose: "Turn a user intent text into one contract-valid Planner plan request through an injected deterministic Provider — validate the intent envelope (E1), refuse explicit command formulations (C1) and path violations (P1), and pass the assembled request through the injected Planner contract validator (R1) without ever fixing or guessing — this module writes no file, runs no tool, opens no network, and executes nothing."
+phases:
+  - PLAN
+requires:
+  tools: []
+provides:
+  - "intent-adapter:propose"
+consumes:
+  - "planner:plan"
+conflicts: []
+outputs: []
+errors:
+  - E-INPUT
+  - E-VALID
+entry: "modules/intent-adapter/index.mjs"
