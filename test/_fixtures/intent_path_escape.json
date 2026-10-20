@@ -1,0 +1,9 @@
+{
+  "request": "Escape the workspace",
+  "tier": "T1",
+  "changes": [
+    { "file": "../outside.md", "why": "touch a file outside the workspace" }
+  ],
+  "verification": ["node --test"],
+  "risks": ["none"]
+}

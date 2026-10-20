@@ -1513,7 +1513,7 @@ listed `detail` unless another code is named.
 | **NEG-17** agent called after refusal | Any refusal shape D0–D6 through call-recording spies | **REFUSE** | The case's exact detail | **0** | refusal report present; `orchestration: null`; never completion | R-08, R-15 |
 | **NEG-18** report after invalid gate transition | Refusal at GATE (attempted crossing without valid approval) | **REFUSE** | The case's exact detail | 0 | composer report mirrors `REFUSED` @ `GATE` with issue `APPROVAL_REQUIRED: <detail>`; approval component emits **no** report; no completion row, no success row | R-13, R-08 |
 | **NEG-19** bypass attempt around GATE | Caller appends an `approval` member to the bundle envelope (C1-style bypass) | **REFUSE** at **VALIDATE** | `INVALID_REQUEST`, E-INPUT (strict envelope — approval is never envelope data) | 0 | refusal report @ `VALIDATE`; GATE never reached; no approval evidence line | R-01, PE-06 |
-| **NEG-20** unauthorized change outside CS-13 | Repository diff vs protected pins (Core `01`–`04`/`12`, planner, agent, manifests, runtime), vs CS-13's exhaustive file list, and vs the Task-16 through Task-21 boundary lists (each extended by its own directive: Task 16 = `runtime/local-runtime.mjs`, `test/local-runtime.test.mjs`, `docs/v3/24-local-runtime.md`, `test/_fixtures/local_runtime_gated.json`; Task 17 = `test/scenario-harness.mjs`, `test/scenario-harness.test.mjs`, `test/scenarios/RT-001…RT-005.json`, `test/scenarios/fixtures/notes.md`, `docs/v3/25-real-scenario-test-harness.md`; Task 18 = `docs/v3/26-native-write-capability.md`, `test/policy-approval.test.mjs`; Task 19 = `docs/v3/27-native-write-capability-ruling.md`, `docs/v3/26-native-write-capability.md`, `docs/v3/05-acceptance-tests.md`, `test/policy-approval.test.mjs`; Task 20 = `docs/v3/14-hotkey-runtime.md`, `docs/v3/24-local-runtime.md`, `docs/v3/25-real-scenario-test-harness.md`, `docs/v3/05-acceptance-tests.md`, `test/policy-approval.test.mjs`; Task 21 = `modules/hotkeys/src/handlers.mjs`, `modules/hotkeys/src/errors.mjs`, `modules/hotkeys/src/runtime.mjs`, `modules/hotkeys/manifest.yaml`, `runtime/local-runtime.mjs`, `test/scenario-harness.mjs`, `test/scenario-harness.test.mjs`, `test/scenarios/RT-006.json`, `test/native-write.test.mjs`, `test/policy-approval.test.mjs`, `docs/v3/05-acceptance-tests.md`, `docs/v3/14-hotkey-runtime.md`, `docs/v3/24-local-runtime.md`, `docs/v3/25-real-scenario-test-harness.md`) | **PASS** iff changed files ⊆ CS-13 ∪ Task-16 ∪ Task-17 ∪ Task-18 ∪ Task-19 ∪ Task-20 ∪ Task-21 lists; else test failure | none in runtime; assertion names the unauthorized file | 0 (static check — no `execute()`) | no report emitted (static/pin test, HKC-17 pattern) | R-09 scans + release gate |
+| **NEG-20** unauthorized change outside CS-13 | Repository diff vs protected pins (Core `01`–`04`/`12`, planner, agent, manifests, runtime), vs CS-13's exhaustive file list, and vs the directive boundary lists — Task-16 through Task-21 enumerated below, the later directive sets (Task 22…Task-29) and Phase-1 enumerated in the test itself (each extended by its own directive: Task 16 = `runtime/local-runtime.mjs`, `test/local-runtime.test.mjs`, `docs/v3/24-local-runtime.md`, `test/_fixtures/local_runtime_gated.json`; Task 17 = `test/scenario-harness.mjs`, `test/scenario-harness.test.mjs`, `test/scenarios/RT-001…RT-005.json`, `test/scenarios/fixtures/notes.md`, `docs/v3/25-real-scenario-test-harness.md`; Task 18 = `docs/v3/26-native-write-capability.md`, `test/policy-approval.test.mjs`; Task 19 = `docs/v3/27-native-write-capability-ruling.md`, `docs/v3/26-native-write-capability.md`, `docs/v3/05-acceptance-tests.md`, `test/policy-approval.test.mjs`; Task 20 = `docs/v3/14-hotkey-runtime.md`, `docs/v3/24-local-runtime.md`, `docs/v3/25-real-scenario-test-harness.md`, `docs/v3/05-acceptance-tests.md`, `test/policy-approval.test.mjs`; Task 21 = `modules/hotkeys/src/handlers.mjs`, `modules/hotkeys/src/errors.mjs`, `modules/hotkeys/src/runtime.mjs`, `modules/hotkeys/manifest.yaml`, `runtime/local-runtime.mjs`, `test/scenario-harness.mjs`, `test/scenario-harness.test.mjs`, `test/scenarios/RT-006.json`, `test/native-write.test.mjs`, `test/policy-approval.test.mjs`, `docs/v3/05-acceptance-tests.md`, `docs/v3/14-hotkey-runtime.md`, `docs/v3/24-local-runtime.md`, `docs/v3/25-real-scenario-test-harness.md`; Phase-1 (build-agent directive) = `docs/v3/36-intent-adapter.md`, `modules/intent-adapter/manifest.yaml`, `modules/intent-adapter/index.mjs`, `modules/intent-adapter/src/adapter.mjs`, `modules/intent-adapter/src/providers.mjs`, `test/intent-adapter.test.mjs`, `test/_fixtures/intent_valid.json`, `test/_fixtures/intent_command_injection.json`, `test/_fixtures/intent_path_escape.json`, `docs/v3/05-acceptance-tests.md`, `docs/v3/24-local-runtime.md`, `runtime/local-runtime.mjs`, `test/policy-approval.test.mjs`) | **PASS** iff changed files ⊆ CS-13 ∪ Task-16 ∪ Task-17 ∪ Task-18 ∪ Task-19 ∪ Task-20 ∪ Task-21 ∪ (Task-22…Task-29 sets) ∪ Phase-1 lists, each enumerated as a set in the test; else test failure | none in runtime; assertion names the unauthorized file | 0 (static check — no `execute()`) | no report emitted (static/pin test, HKC-17 pattern) | R-09 scans + release gate |
 
 **R-M mutation fixtures (specification — land atomically with CS-13; each
 asserted byte-different from pristine `composition_request.json` before use;
@@ -1945,3 +1945,126 @@ byte-unchanged; `runtime/local-runtime.mjs` changed only by the explicitly
 authorized `--workspace` opt-in (24 §3.1 and the Task 21 directive) with
 default behavior byte-compatible; NEG-20's boundary extended by the fourteen-file
 Task-21 list only (documented in its row above and in the test itself).
+
+## Group V — Intent Adapter (added Phase 1, build-agent directive; contracts: `03` §2/§6, `19`, `36`)
+
+**Status: EXECUTABLE — landed with Phase 1.** Group V is the authoritative
+acceptance group for the Intent Adapter (the planning front door that turns
+a user intent into a contract-valid Planner request through an injected
+Provider). The executable file is `test/intent-adapter.test.mjs`
+(**V-01…V-14**, 14 tests, 2 suites). Both directive amendments are pinned as
+named tests: **V-06** proves C1 refuses only *explicit command formulations*
+(never bare metacharacters in natural prose), and **V-01/V-09/V-10** prove
+the disclosed deterministic demo provider is the `--intent` default with no
+network, key, or environment path anywhere in the module.
+
+**V-01 Manifest contract validity [S/R]**
+*Scenario:* Register `modules/intent-adapter/manifest.yaml` through the real
+Module Registry; assert the exact `03` §2 field set, phase `PLAN`, zero
+tools.
+*Pass criteria:* `MR_OK`, zero violations, field list `=== MANIFEST_FIELDS`,
+`requires.tools: []`.
+
+**V-02 Constructor fail-closed [R]**
+*Scenario:* `createIntentAdapter` without a provider, without a validator,
+or with a non-callable `complete`.
+*Pass criteria:* each throws `E_INPUT_INVALID_INTENT_ADAPTER_CONFIG` with a
+structured `E-INPUT` error; no default provider exists inside the module.
+
+**V-03 Valid text intent → real plan [R]**
+*Scenario:* `test/_fixtures/intent_valid.json` (and a T0 one-liner) through
+adapter → real Planner → real Report Bus.
+*Pass criteria:* proposal `ok`, `validatePlanRequest` agrees (zero
+violations), plan `COMPLETED`/`COMPLETE`, `plan.task === intent.request`
+verbatim, `review.required === false` without a trigger, report hash present.
+
+**V-04 Malformed / incomplete provider output refuses [R]**
+*Scenario:* stub providers returning non-JSON text, JSON arrays, numbers,
+`null`, an unknown tier, or a T1 request without risks.
+*Pass criteria:* every case `ok:false`, `status:REFUSED`, `stage:ADAPT`,
+`request:null`; detail names `PR1 …` or the Planner's own R1 detail
+verbatim; never repaired, never guessed.
+
+**V-05 Explicit command formulations refuse (C1) [R]**
+*Scenario:* `$( … )`, `sudo …` at field start, `…; rm -rf …`,
+`node --inspect …`, `… git push --force …`, `curl https://…`,
+`… > /etc/passwd`, `sed -i …` — each in `task`/`why`.
+*Pass criteria:* `INVALID_REQUEST`/E-INPUT with the C1 sub-rule id
+(C1a/C1b/C1c/C1d) in the detail; the command-injection fixture refuses the
+same way end to end.
+
+**V-06 C1 precision — amendment 1 [R]**
+*Scenario:* natural prose carrying separators or ambiguous tokens: `Add
+validation; update docs`, `node upgrades break types`, `git log shows stale
+entries`, `npm test passes`, `git push hooks break CI`, `reduce > 50% …`.
+*Pass criteria:* every case proposes `ok:true` — refusals are keyed to
+explicit command formulations, never to bare metacharacters.
+
+**V-07 Path policy (P1) [R]**
+*Scenario:* `../outside.md`, `/etc/passwd`, `~/secrets.txt`,
+`src\windows.md`, `dir/../../escape.md`, spaces, empty string.
+*Pass criteria:* each refuses `INVALID_REQUEST` with `P1` and the field
+name in the detail; `test/_fixtures/intent_path_escape.json` refuses the
+same way; a plain relative path passes the policy layer.
+
+**V-08 Determinism [R]**
+*Scenario:* the same intent proposed three times through fresh adapters;
+refusals repeated; demo provider assembly repeated; the full intent path run
+twice.
+*Pass criteria:* byte-identical JSON results and stdout; frozen proposal,
+request, changes; no shared state between adapter instances.
+
+**V-09 No write, no execution, no network/env [S/R]**
+*Scenario:* source scan of all four module files; `git status` + manifest
+mtime across a `propose`; a spy planner through `runIntentPath`.
+*Pass criteria:* zero `node:fs`/`node:child_process`/`node:http`/`node:net`/`node:crypto`
+imports, no write/exec/env/clock/random tokens, porcelain and mtime
+unchanged, exactly one `plan()` call, result keys are the planner shape
+only.
+
+**V-10 CLI intent path exit codes [R]**
+*Scenario:* real process: valid fixture, injection fixture, escape fixture,
+empty stdin, valid stdin, `--intent` with `--approval`, with `--workspace`,
+repeated, and without input.
+*Pass criteria:* exits `0`, `2`, `2`, `2`, `0`, `2`, `2`, `2`, `2`
+respectively; header carries `mode:"intent"`; refusals show
+`stage:"ADAPT"`, `planRequest:null`, `reportSha256:null`; usage errors on
+stderr (`INPUT ERROR:`); no machine paths in stdout.
+
+**V-11 Bundle path byte-compatibility [R]**
+*Scenario:* the pristine bundle fixture through the unchanged CLI, twice.
+*Pass criteria:* exit 0, header **without** a `mode` field (original
+shape), `Completion Report` text present, byte-identical across runs —
+Group S behavior unchanged.
+
+**V-12 Intent envelope refusals (E1) [R]**
+*Scenario:* extra fields (`execute`, `approval`), non-objects, missing /
+blank / multiline `request`; a provider smuggling an `execution` field.
+*Pass criteria:* E1 details name the offending field; smuggled plan fields
+refuse via the Planner contract (`unexpected request field`); an
+approval-shaped value never survives.
+
+**V-13 Throwing provider refuses [R]**
+*Scenario:* provider throws (with a newline in the message); full intent
+path with a counting planner.
+*Pass criteria:* `PR1 provider threw:` single-line detail, `ok:false`,
+planner **never called**, `report:null`, exit code 2 — no crash, no
+fabricated report, no silent success.
+
+**V-14 Gated plan stops at the plan [R/S]**
+*Scenario:* `T2 + trigger: "migration"` intent through `runIntentPath` and
+through the CLI.
+*Pass criteria:* plan produced with `review.required === true` (the GATE
+condition exists), result keys are the planner shape only, `stage` never
+`GATE`/`ORCHESTRATE`, header carries no `approval`/`execution` member, and
+`--intent` cannot be combined with `--approval` (V-10) — the execution
+decision remains exclusively on the bundle path.
+
+**Phase-1 release gate:** `node --test test/intent-adapter.test.mjs` =
+14/14; full suite `node --test test/*.test.mjs` = **319 (305 + Group V
+14)**, 57 suites, 0 failures, 0 skipped, exit 0; Groups A–U untouched
+(PE-05, PE-21, M4, Groups Q/R/S/T green); protected pins `01`–`04`, `12`,
+`22`, `23` byte-unchanged; NEG-20's boundary extended by the thirteen-file
+Phase-1 list only (documented in its row above and in the test itself);
+`runtime/local-runtime.mjs` changed only by the additive `--intent` path
+with the bundle path byte-compatible.
